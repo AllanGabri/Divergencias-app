@@ -1,31 +1,44 @@
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const esc = (s) =>
+  String(s ?? "").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
+  );
 
 const MOTIVOS = [
   ["falta", "Falta"],
   ["danificado", "Item danificado"],
   ["sem_validade", "Sem validade"],
-  ["validade_incorreta", "Validade incorreta"],
+  ["validade_prox", "Validade próxima"],
   ["codigo_incorreto", "Código incorreto"],
   ["sobra", "Sobra"],
 ];
 
-let imagem = null;          // File/Blob do print
-let itens = [];             // itens divergentes
-let fornecedor = "";        // código do fornecedor lido do print
+let imagem = null; // File/Blob do print
+let itens = []; // itens divergentes
+let fornecedor = ""; // código do fornecedor lido do print
 let empresaSugerida = "";
-let ultimo = null;          // dados da última geração (para salvar)
+let ultimo = null; // dados da última geração (para salvar)
 
 // ------------------------------------------------------------ memória / topo
 async function carregarMemoria() {
   try {
     const m = await (await fetch("/api/memoria")).json();
     $("planilha").textContent = "Planilha: " + m.caminho_planilha;
-    $("listaEmpresas").innerHTML = m.empresas.map((e) => `<option value="${esc(e)}">`).join("");
-    $("listaVendedores").innerHTML = m.vendedores.map((e) => `<option value="${esc(e)}">`).join("");
-  } catch { /* sem memória ainda */ }
+    $("listaEmpresas").innerHTML = m.empresas
+      .map((e) => `<option value="${esc(e)}">`)
+      .join("");
+    $("listaVendedores").innerHTML = m.vendedores
+      .map((e) => `<option value="${esc(e)}">`)
+      .join("");
+  } catch {
+    /* sem memória ainda */
+  }
 }
 
 // ------------------------------------------------------------ 1. print
@@ -40,9 +53,16 @@ function definirImagem(file) {
 }
 
 $("drop").addEventListener("click", () => $("arquivo").click());
-$("arquivo").addEventListener("change", (e) => definirImagem(e.target.files[0]));
-$("drop").addEventListener("dragover", (e) => { e.preventDefault(); $("drop").classList.add("over"); });
-$("drop").addEventListener("dragleave", () => $("drop").classList.remove("over"));
+$("arquivo").addEventListener("change", (e) =>
+  definirImagem(e.target.files[0]),
+);
+$("drop").addEventListener("dragover", (e) => {
+  e.preventDefault();
+  $("drop").classList.add("over");
+});
+$("drop").addEventListener("dragleave", () =>
+  $("drop").classList.remove("over"),
+);
 $("drop").addEventListener("drop", (e) => {
   e.preventDefault();
   $("drop").classList.remove("over");
@@ -50,7 +70,10 @@ $("drop").addEventListener("drop", (e) => {
 });
 document.addEventListener("paste", (e) => {
   for (const it of e.clipboardData?.items || []) {
-    if (it.type.startsWith("image/")) { definirImagem(it.getAsFile()); break; }
+    if (it.type.startsWith("image/")) {
+      definirImagem(it.getAsFile());
+      break;
+    }
   }
 });
 
@@ -99,11 +122,15 @@ function novoItem(i) {
 }
 
 function renderItens() {
-  $("itens").innerHTML = itens.map((it, n) => {
-    const dif = it.conferida - it.lancada;
-    const sug = dif > 0 ? "sobrou" : dif < 0 ? "faltou" : "";
-    const aviso = it.codigo.length !== 13 ? `<span class="aviso">Código com ${it.codigo.length} dígitos – confira</span>` : "";
-    return `
+  $("itens").innerHTML = itens
+    .map((it, n) => {
+      const dif = it.conferida - it.lancada;
+      const sug = dif > 0 ? "sobrou" : dif < 0 ? "faltou" : "";
+      const aviso =
+        it.codigo.length !== 13
+          ? `<span class="aviso">Código com ${it.codigo.length} dígitos – confira</span>`
+          : "";
+      return `
     <div class="item ${it.motivo ? "pronto" : ""} ${it.motivo === "codigo_incorreto" ? "cod-inc" : ""}" data-n="${n}">
       <button class="rm" data-rm="${n}">remover</button>
       <div class="linha1">
@@ -118,14 +145,18 @@ function renderItens() {
         ${aviso}
       </div>
       <div class="motivos">
-        ${MOTIVOS.map(([v, t]) => `
-          <label><input type="radio" name="m${n}" value="${v}" ${it.motivo === v ? "checked" : ""}> ${t}</label>`).join("")}
+        ${MOTIVOS.map(
+          ([v, t]) => `
+          <label><input type="radio" name="m${n}" value="${v}" ${it.motivo === v ? "checked" : ""}> ${t}</label>`,
+        ).join("")}
       </div>
       
 
 
 <div class="corrige">
-  ${it.motivo === "validade_incorreta" ? `
+  ${
+    it.motivo === "validade_prox"
+      ? `
     <label class="campo-validade">
       Validade do produto
       <input
@@ -135,9 +166,13 @@ function renderItens() {
         required
       >
     </label>
-  ` : ""}
+  `
+      : ""
+  }
 
-  ${it.motivo === "codigo_incorreto" ? `
+  ${
+    it.motivo === "codigo_incorreto"
+      ? `
     <label>
       Cód. faturado (errado)
       <input data-f="cod_errado" value="${esc(it.cod_errado)}">
@@ -146,12 +181,15 @@ function renderItens() {
       Cód. correto
       <input data-f="cod_correto" value="${esc(it.cod_correto)}">
     </label>
-  ` : ""}
+  `
+      : ""
+  }
 </div>
 
 
     </div>`;
-  }).join("");
+    })
+    .join("");
   atualizarOk();
 }
 
@@ -159,7 +197,8 @@ $("itens").addEventListener("input", (e) => {
   const f = e.target.dataset.f;
   if (!f) return;
   const n = +e.target.closest(".item").dataset.n;
-  itens[n][f] = f === "qtd" ? Math.max(1, parseInt(e.target.value) || 1) : e.target.value;
+  itens[n][f] =
+    f === "qtd" ? Math.max(1, parseInt(e.target.value) || 1) : e.target.value;
   atualizarOk();
 });
 
@@ -189,29 +228,39 @@ function atualizarOk() {
   const ok = itens.length > 0 && itens.every((i) => i.motivo);
   $("btnOk").disabled = !ok;
   const faltam = itens.filter((i) => !i.motivo).length;
-  $("msgItens").textContent = !itens.length ? "Nenhum item." : faltam ? `Faltam ${faltam} item(ns) sem motivo.` : "Tudo marcado.";
+  $("msgItens").textContent = !itens.length
+    ? "Nenhum item."
+    : faltam
+      ? `Faltam ${faltam} item(ns) sem motivo.`
+      : "Tudo marcado.";
 }
 
 // ------------------------------------------------------------ 3. empresa + textos
 $("btnOk").addEventListener("click", () => {
-  if (!$("nf").value.trim()) { $("msgItens").textContent = "Informe o número da NF."; $("nf").focus(); return; }
-  const semCod = itens.find((i) => i.motivo === "codigo_incorreto" && (!i.cod_errado.trim() || !i.cod_correto.trim()));
-  if (semCod) { $("msgItens").textContent = `Preencha os dois códigos de "${semCod.nome}".`; return; }
+  if (!$("nf").value.trim()) {
+    $("msgItens").textContent = "Informe o número da NF.";
+    $("nf").focus();
+    return;
+  }
+  const semCod = itens.find(
+    (i) =>
+      i.motivo === "codigo_incorreto" &&
+      (!i.cod_errado.trim() || !i.cod_correto.trim()),
+  );
+  if (semCod) {
+    $("msgItens").textContent = `Preencha os dois códigos de "${semCod.nome}".`;
+    return;
+  }
 
+  const itemValidadeIncorreta = itens.find(
+    (i) => i.motivo === "validade_prox" && !i.validade,
+  );
 
-const itemValidadeIncorreta = itens.find(
-  (i) =>
-    i.motivo === "validade_incorreta" &&
-    !i.validade
-);
-
-if (itemValidadeIncorreta) {
-  $("msgItens").textContent =
-    `Selecione a validade do produto "${itemValidadeIncorreta.nome}".`;
-  return;
-}
-
-
+  if (itemValidadeIncorreta) {
+    $("msgItens").textContent =
+      `Selecione a validade do produto "${itemValidadeIncorreta.nome}".`;
+    return;
+  }
 
   $("empresa").value = empresaSugerida;
   $("data").value = new Date().toLocaleDateString("sv-SE"); // aaaa-mm-dd no fuso local
@@ -234,17 +283,22 @@ function saudacao() {
 const nomeMin = (s) => s.trim().toLowerCase();
 
 function linhaMotivo(it) {
-  const q = it.qtd, um = q === 1;
+  const q = it.qtd,
+    um = q === 1;
   switch (it.motivo) {
-    case "sobra":        return um ? "veio 1 a mais" : `vieram ${q} a mais`;
-    case "falta":        return um ? "faltou 1un" : `faltaram ${q}un`;
-    case "danificado":   return um ? "veio 1un danificado" : `vieram ${q}un danificados`;
-    case "sem_validade": return um ? "veio 1un sem validade" : `vieram ${q}un sem validade`;
-    case "validade_incorreta":
-  return `${q}un c/validade ${it.validade || "NÃO INFORMADA"}`;
-  
+    case "sobra":
+      return um ? "veio 1un a mais" : `vieram ${q} a mais`;
+    case "falta":
+      return um ? "faltou 1un" : `faltaram ${q}un`;
+    case "danificado":
+      return um ? "veio 1un danificado" : `vieram ${q}un danificados`;
+    case "sem_validade":
+      return um ? "veio 1un sem validade" : `vieram ${q}un sem validade`;
+    case "validade_prox":
+      return `${q}un c/validade ${it.validade || "NÃO INFORMADA"}`;
+
     default:
-    return "";
+      return "";
   }
 }
 
@@ -261,18 +315,26 @@ function gerarTextos() {
   if (normais.length) {
     $("txtDiv").value =
       `${s}, tudo bem? teve divergencia na nf ${nf} da ${emp}\n\n` +
-      normais.map((i) => `${nomeMin(i.nome)} cod ${i.codigo}\n${linhaMotivo(i)}`).join("\n\n");
+      normais
+        .map((i) => `${nomeMin(i.nome)} cod ${i.codigo}\n${linhaMotivo(i)}`)
+        .join("\n\n");
   }
 
   $("boxCarta").hidden = !cartas.length;
   if (cartas.length) {
     $("txtCarta").value =
       `${s}, tudo bem?\n\npreciso que emita uma carta de correçao para a nf ${nf} da ${emp} para os seguintes itens:\n\n` +
-      cartas.map((i) => `${nomeMin(i.nome)} veio faturado com o cod ${i.cod_errado.trim()} preciso que corrija para o cod ${i.cod_correto.trim()}`).join("\n\n");
+      cartas
+        .map(
+          (i) =>
+            `${nomeMin(i.nome)} veio faturado com o cod ${i.cod_errado.trim()} preciso que corrija para o cod ${i.cod_correto.trim()}`,
+        )
+        .join("\n\n");
   }
 
   ultimo = {
-    empresa, nf,
+    empresa,
+    nf,
     vendedor: $("vendedor").value.trim(),
     data: $("data").value,
     fornecedor: $("forn").value.trim(),
@@ -288,8 +350,12 @@ function gerarTextos() {
 document.addEventListener("click", async (e) => {
   if (!e.target.classList.contains("copy")) return;
   const ta = $(e.target.dataset.alvo);
-  try { await navigator.clipboard.writeText(ta.value); }
-  catch { ta.select(); document.execCommand("copy"); }
+  try {
+    await navigator.clipboard.writeText(ta.value);
+  } catch {
+    ta.select();
+    document.execCommand("copy");
+  }
   const t = e.target.textContent;
   e.target.textContent = "Copiado ✓";
   setTimeout(() => (e.target.textContent = t), 1500);
@@ -298,7 +364,8 @@ document.addEventListener("click", async (e) => {
 // ------------------------------------------------------------ planilha
 async function salvar(forcar = false) {
   const msg = $("msgSalvar");
-  msg.className = ""; msg.textContent = "Salvando…";
+  msg.className = "";
+  msg.textContent = "Salvando…";
   // se o usuário editou os textos, nada disso vai para a planilha; só os dados.
   try {
     const r = await fetch("/api/salvar", {
@@ -309,7 +376,12 @@ async function salvar(forcar = false) {
     const d = await r.json();
     if (!r.ok) throw new Error(d.erro || "Erro ao salvar.");
     if (d.duplicada) {
-      if (confirm(`Já existe uma linha com essa NF neste mês:\n${d.existente}\n\nLançar mesmo assim?`)) return salvar(true);
+      if (
+        confirm(
+          `Já existe uma linha com essa NF neste mês:\n${d.existente}\n\nLançar mesmo assim?`,
+        )
+      )
+        return salvar(true);
       msg.textContent = "Cancelado.";
       return;
     }
@@ -326,8 +398,11 @@ async function salvar(forcar = false) {
 $("btnSalvar").addEventListener("click", () => salvar(false));
 
 $("btnNovo").addEventListener("click", () => {
-  imagem = null; itens = []; ultimo = null;
-  $("preview").hidden = true; $("preview").src = "";
+  imagem = null;
+  itens = [];
+  ultimo = null;
+  $("preview").hidden = true;
+  $("preview").src = "";
   $("arquivo").value = "";
   $("btnLer").disabled = true;
   $("msgOcr").textContent = "";

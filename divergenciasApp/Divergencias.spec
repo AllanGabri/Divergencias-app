@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 
+
 a = Analysis(
     ['app.py'],
     pathex=[],
@@ -32,6 +33,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=r'C:\Users\estoque 3\Desktop\divergencias-app\divergenciasApp\icon\icons8-app-windows-10-150.ico',
 )
 coll = COLLECT(
     exe,

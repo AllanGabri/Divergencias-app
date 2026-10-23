@@ -287,7 +287,7 @@ function linhaMotivo(it) {
     um = q === 1;
   switch (it.motivo) {
     case "sobra":
-      return um ? "veio 1 a mais" : `vieram ${q} a mais`;
+      return um ? "veio 1un a mais" : `vieram ${q} a mais`;
     case "falta":
       return um ? "faltou 1un" : `faltaram ${q}un`;
     case "danificado":
