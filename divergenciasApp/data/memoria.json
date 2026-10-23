@@ -1,14 +1,17 @@
 {
   "empresas": [
+    "CAPRICHOSA",
     "DALLA",
     "PLATINA"
   ],
   "vendedores": [
+    "JEFERSON",
     "ROBSON",
     "VANDRE"
   ],
   "fornecedores": {
     "1885": "PLATINA",
-    "2448": "DALLA"
+    "2448": "DALLA",
+    "1285": "CAPRICHOSA"
   }
 }

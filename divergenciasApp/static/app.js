@@ -14,7 +14,7 @@ const MOTIVOS = [
   ["falta", "Falta"],
   ["danificado", "Item danificado"],
   ["sem_validade", "Sem validade"],
-  ["validade_incorreta", "Validade incorreta"],
+  ["validade_prox", "Validade próxima"],
   ["codigo_incorreto", "Código incorreto"],
   ["sobra", "Sobra"],
 ];
@@ -155,7 +155,7 @@ function renderItens() {
 
 <div class="corrige">
   ${
-    it.motivo === "validade_incorreta"
+    it.motivo === "validade_prox"
       ? `
     <label class="campo-validade">
       Validade do produto
@@ -253,7 +253,7 @@ $("btnOk").addEventListener("click", () => {
   }
 
   const itemValidadeIncorreta = itens.find(
-    (i) => i.motivo === "validade_incorreta" && !i.validade,
+    (i) => i.motivo === "validade_prox" && !i.validade,
   );
 
   if (itemValidadeIncorreta) {
@@ -294,7 +294,7 @@ function linhaMotivo(it) {
       return um ? "veio 1un danificado" : `vieram ${q}un danificados`;
     case "sem_validade":
       return um ? "veio 1un sem validade" : `vieram ${q}un sem validade`;
-    case "validade_incorreta":
+    case "validade_prox":
       return `${q}un c/validade ${it.validade || "NÃO INFORMADA"}`;
 
     default:
