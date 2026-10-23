@@ -1,88 +1,91 @@
 <!doctype html>
 <html lang="pt-BR">
+
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Divergências de conferência</title>
-<link rel="stylesheet" href="/static/style.css">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Divergências de conferência</title>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
+
 <body>
-<header>
-  <h1>Divergências de conferência</h1>
-  <!-- <span id="planilha" class="muted"></span> -->
-</header>
+    <header>
+        <h1>Divergências de conferência</h1>
+        <!-- <span id="planilha" class="muted"></span> -->
+    </header>
 
-<main>
-  <!-- 1. PRINT -->
-  <section class="card">
-    <h2>Print da conferência</h2>
-    <div id="drop" tabindex="0">
-      <p><strong>Cole o print aqui (Ctrl+V)</strong>, arraste a imagem ou clique para escolher o arquivo.</p>
-      <input type="file" id="arquivo" accept="image/*" hidden>
-      <img id="preview" alt="" hidden>
-    </div>
-    <div class="row">
-      <button id="btnLer" class="primary" disabled>Ler print</button>
-      <span id="msgOcr" class="muted"></span>
-    </div>
-  </section>
+    <main>
+        <!-- 1. PRINT -->
+        <section class="card">
+            <h2>Print da conferência</h2>
+            <div id="drop" tabindex="0">
+                <p><strong>Cole o print aqui (Ctrl+V)</strong>, arraste a imagem ou clique para escolher o arquivo.</p>
+                <input type="file" id="arquivo" accept="image/*" hidden>
+                <img id="preview" alt="" hidden>
+            </div>
+            <div class="row">
+                <button id="btnLer" class="primary" disabled>Ler print</button>
+                <span id="msgOcr" class="muted"></span>
+            </div>
+        </section>
 
-  <!-- 2. ITENS -->
-  <section class="card" id="secItens" hidden>
-    <h2>2. Motivo de cada item</h2>
-    <div class="row">
-      <label>NF <input id="nf" size="10"></label>
-      <label>Cód. fornecedor <input id="forn" size="6"></label>
-      <button id="btnAdd" class="ghost">+ item manual</button>
-    </div>
-    <div id="itens"></div>
-    <div class="row">
-      <button id="btnOk" class="primary" disabled>OK</button>
-      <span id="msgItens" class="muted">Marque o motivo de todos os itens.</span>
-    </div>
-  </section>
+        <!-- 2. ITENS -->
+        <section class="card" id="secItens" hidden>
+            <h2>2. Motivo de cada item</h2>
+            <div class="row">
+                <label>NF <input id="nf" size="10"></label>
+                <label>Cód. fornecedor <input id="forn" size="6"></label>
+                <button id="btnAdd" class="ghost">+ item manual</button>
+            </div>
+            <div id="itens"></div>
+            <div class="row">
+                <button id="btnOk" class="primary" disabled>OK</button>
+                <span id="msgItens" class="muted">Marque o motivo de todos os itens.</span>
+            </div>
+        </section>
 
-  <!-- 3. TEXTOS -->
-  <section class="card" id="secTextos" hidden>
-    <h2>3. Mensagens</h2>
-    <div id="boxDiv" class="msgbox" hidden>
-      <h3>Divergência</h3>
-      <textarea id="txtDiv" rows="10"></textarea>
-      <button class="copy" data-alvo="txtDiv">Copiar</button>
-    </div>
-    <div id="boxCarta" class="msgbox" hidden>
-      <h3>Carta de correção</h3>
-      <textarea id="txtCarta" rows="10"></textarea>
-      <button class="copy" data-alvo="txtCarta">Copiar</button>
-    </div>
-    <div class="row">
-      <button id="btnSalvar" class="primary">Salvar na planilha</button>
-      <button id="btnNovo" class="ghost">Nova conferência</button>
-      <span id="msgSalvar"></span>
-    </div>
-  </section>
-</main>
+        <!-- 3. TEXTOS -->
+        <section class="card" id="secTextos" hidden>
+            <h2>3. Mensagens</h2>
+            <div id="boxDiv" class="msgbox" hidden>
+                <h3>Divergência</h3>
+                <textarea id="txtDiv" rows="10"></textarea>
+                <button class="copy" data-alvo="txtDiv">Copiar</button>
+            </div>
+            <div id="boxCarta" class="msgbox" hidden>
+                <h3>Carta de correção</h3>
+                <textarea id="txtCarta" rows="10"></textarea>
+                <button class="copy" data-alvo="txtCarta">Copiar</button>
+            </div>
+            <div class="row">
+                <button id="btnSalvar" class="primary">Salvar na planilha</button>
+                <button id="btnNovo" class="ghost">Nova conferência</button>
+                <span id="msgSalvar"></span>
+            </div>
+        </section>
+    </main>
 
-<!-- pergunta da empresa -->
-<dialog id="dlg">
-  <form method="dialog" id="formEmpresa">
-    <h2>Empresa Fornecedora</h2>
-    <label>Empresa
+    <!-- pergunta da empresa -->
+    <dialog id="dlg">
+        <form method="dialog" id="formEmpresa">
+            <h2>Empresa Fornecedora</h2>
+            <label>Empresa
       <input id="empresa" list="listaEmpresas" required autocomplete="off" placeholder="ex.: PLATINA">
     </label>
-    <datalist id="listaEmpresas"></datalist>
-    <label>Vendedor
+            <datalist id="listaEmpresas"></datalist>
+            <label>Vendedor
       <input id="vendedor" list="listaVendedores" autocomplete="off">
     </label>
-    <datalist id="listaVendedores"></datalist>
-    <label>Data <input type="date" id="data"></label>
-    <div class="row">
-      <button value="ok" class="primary">Gerar mensagens</button>
-      <button value="cancel" class="ghost" formnovalidate>Cancelar</button>
-    </div>
-  </form>
-</dialog>
+            <datalist id="listaVendedores"></datalist>
+            <label>Data <input type="date" id="data"></label>
+            <div class="row">
+                <button value="ok" class="primary">Gerar mensagens</button>
+                <button value="cancel" class="ghost" formnovalidate>Cancelar</button>
+            </div>
+        </form>
+    </dialog>
 
-<script src="/static/app.js"></script>
+    <script src="/static/app.js"></script>
 </body>
+
 </html>

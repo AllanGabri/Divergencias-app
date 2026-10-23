@@ -1,0 +1,14 @@
+{
+  "empresas": [
+    "DALLA",
+    "PLATINA"
+  ],
+  "vendedores": [
+    "ROBSON",
+    "VANDRE"
+  ],
+  "fornecedores": {
+    "1885": "PLATINA",
+    "2448": "DALLA"
+  }
+}
