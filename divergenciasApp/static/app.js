@@ -412,3 +412,286 @@ $("btnNovo").addEventListener("click", () => {
 });
 
 carregarMemoria();
+
+
+/* ===== CONSULTA E ACOMPANHAMENTO DE DIVERGÊNCIAS ===== */
+
+let divergenciaSelecionada = null;
+
+function escaparHTML(valor) {
+  return String(valor ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[c]);
+}
+
+async function carregarDivergencias() {
+  const mensagem = $("consultaMensagem");
+  const tabela = $("tabelaDivergencias");
+
+  mensagem.textContent = "Carregando divergências...";
+  tabela.innerHTML = '<tr><td colspan="6">Carregando...</td></tr>';
+
+  const parametros = new URLSearchParams();
+
+  const filtros = {
+    data_inicio: $("filtroDataInicio").value,
+    data_fim: $("filtroDataFim").value,
+    empresa: $("filtroEmpresa").value.trim(),
+    vendedor: $("filtroVendedor").value.trim(),
+    status: $("filtroStatus").value,
+  };
+
+  for (const [chave, valor] of Object.entries(filtros)) {
+    if (valor) parametros.set(chave, valor);
+  }
+
+  try {
+    const resposta = await fetch(
+      `/api/divergencias?${parametros.toString()}`
+    );
+    const registros = await resposta.json();
+
+    if (!resposta.ok) {
+      throw new Error(registros.erro || "Não foi possível consultar.");
+    }
+
+    if (!Array.isArray(registros) || registros.length === 0) {
+      tabela.innerHTML =
+        '<tr><td colspan="6">Nenhuma divergência encontrada.</td></tr>';
+      mensagem.textContent = "Nenhum registro encontrado.";
+      return;
+    }
+
+    tabela.innerHTML = registros.map((registro) => {
+      const data = escaparHTML(
+        String(registro.data_registro || "").slice(0, 10)
+      );
+      const empresa = escaparHTML(registro.empresa);
+      const vendedor = escaparHTML(registro.vendedor);
+      const nf = escaparHTML(registro.nf);
+      const status = registro.status === "OK" ? "OK" : "PENDENTE";
+      const classe = status === "OK" ? "ok" : "pendente";
+
+      return `
+        <tr>
+          <td>${data}</td>
+          <td>${empresa}</td>
+          <td>${vendedor}</td>
+          <td>${nf}</td>
+          <td><span class="${classe}">${status}</span></td>
+          <td>
+            <button type="button" data-ver="${Number(registro.id)}">
+              Ver detalhes
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+
+    // Os IDs vêm do banco e são convertidos para números.
+    tabela.querySelectorAll("[data-ver]").forEach((botao) => {
+      botao.addEventListener("click", () => {
+        const id = Number(botao.dataset.ver);
+        const registro = registros.find((r) => Number(r.id) === id);
+        if (registro) abrirDetalheDivergencia(registro);
+      });
+    });
+
+    mensagem.textContent = `${registros.length} divergência(s) encontrada(s).`;
+  } catch (erro) {
+    tabela.innerHTML =
+      '<tr><td colspan="6">Erro ao carregar os registros.</td></tr>';
+    mensagem.textContent = erro.message;
+  }
+}
+
+function abrirDetalheDivergencia(registro) {
+  divergenciaSelecionada = registro;
+
+  const painel = $("detalheDivergencia");
+  const conteudo = $("detalheConteudo");
+  const dados = registro.dados || {};
+  const listaItens = Array.isArray(dados.itens) ? dados.itens : [];
+
+  const linhasItens = listaItens.map((item) => `
+    <tr>
+      <td>${escaparHTML(item.nome || item.descricao || "")}</td>
+      <td>${escaparHTML(item.codigo || item.cod_correto || "")}</td>
+      <td>${escaparHTML(item.qtd ?? "")}</td>
+      <td>${escaparHTML(item.conferida ?? "")}</td>
+      <td>${escaparHTML(item.lancada ?? "")}</td>
+      <td>${escaparHTML(item.motivo || "")}</td>
+    </tr>
+  `).join("");
+
+  conteudo.innerHTML = `
+    <p><strong>Empresa:</strong> ${escaparHTML(registro.empresa)}</p>
+    <p><strong>Vendedor:</strong> ${escaparHTML(registro.vendedor)}</p>
+    <p><strong>Nota fiscal:</strong> ${escaparHTML(registro.nf)}</p>
+    <p><strong>Fornecedor:</strong> ${escaparHTML(registro.fornecedor)}</p>
+    <p><strong>Status:</strong> ${escaparHTML(registro.status)}</p>
+    <p><strong>Solução registrada:</strong> ${escaparHTML(registro.solucao || "Nenhuma")}</p>
+
+    <h4>Itens da conferência</h4>
+    <div style="overflow-x:auto">
+      <table style="width:100%; border-collapse:collapse">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Código</th>
+            <th>Quantidade</th>
+            <th>Conferida</th>
+            <th>Lançada</th>
+            <th>Motivo</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${linhasItens || '<tr><td colspan="6">Nenhum item disponível.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  $("solucaoDivergencia").value = registro.solucao || "";
+  $("detalheMensagem").textContent = "";
+  $("btnReabrirDivergencia").disabled = registro.status !== "OK";
+  $("btnResolverDivergencia").disabled = registro.status === "OK";
+
+  painel.hidden = false;
+  painel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function atualizarStatusDivergencia(novoStatus) {
+  if (!divergenciaSelecionada) return;
+
+  const solucao = $("solucaoDivergencia").value.trim();
+  const mensagem = $("detalheMensagem");
+
+  if (novoStatus === "OK" && !solucao) {
+    mensagem.textContent =
+      "Descreva como a divergência foi resolvida antes de continuar.";
+    return;
+  }
+
+  if (novoStatus === "PENDENTE" &&
+      !confirm("Deseja reabrir esta divergência?")) {
+    return;
+  }
+
+  mensagem.textContent = "Salvando alterações...";
+
+  try {
+    const resposta = await fetch(
+      `/api/divergencias/${Number(divergenciaSelecionada.id)}/status`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: novoStatus,
+          solucao: novoStatus === "OK" ? solucao : "",
+        }),
+      }
+    );
+
+    const resultado = await resposta.json();
+
+    if (!resposta.ok) {
+      throw new Error(resultado.erro || "Não foi possível atualizar.");
+    }
+
+    mensagem.textContent = "Alterações salvas no banco de dados.";
+
+    await carregarDivergencias();
+
+    const consultaAtualizada = await fetch(
+      `/api/divergencias?status=${novoStatus}`
+    );
+    const registrosAtualizados = await consultaAtualizada.json();
+
+    const atualizado = Array.isArray(registrosAtualizados)
+      ? registrosAtualizados.find(
+          (r) => Number(r.id) === Number(divergenciaSelecionada.id)
+        )
+      : null;
+
+    if (atualizado) {
+      abrirDetalheDivergencia(atualizado);
+      $("detalheMensagem").textContent = "Alterações salvas com sucesso.";
+    } else {
+      $("detalheDivergencia").hidden = true;
+      divergenciaSelecionada = null;
+    }
+  } catch (erro) {
+    mensagem.textContent = `Erro: ${erro.message}`;
+  }
+}
+
+$("btnFiltrarDivergencias").addEventListener(
+  "click",
+  carregarDivergencias
+);
+
+$("btnAtualizarDivergencias").addEventListener(
+  "click",
+  carregarDivergencias
+);
+
+$("btnLimparFiltros").addEventListener("click", () => {
+  $("filtroDataInicio").value = "";
+  $("filtroDataFim").value = "";
+  $("filtroEmpresa").value = "";
+  $("filtroVendedor").value = "";
+  $("filtroStatus").value = "";
+  carregarDivergencias();
+});
+
+$("btnResolverDivergencia").addEventListener("click", () => {
+  atualizarStatusDivergencia("OK");
+});
+
+$("btnReabrirDivergencia").addEventListener("click", () => {
+  atualizarStatusDivergencia("PENDENTE");
+});
+
+$("btnFecharDetalhe").addEventListener("click", () => {
+  $("detalheDivergencia").hidden = true;
+  divergenciaSelecionada = null;
+});
+
+
+
+const modalConsulta = $("modalConsulta");
+const btnAbrirConsulta = $("btnAbrirConsulta");
+const btnFecharConsulta = $("btnFecharConsulta");
+
+btnAbrirConsulta.addEventListener("click", async () => {
+  if (!modalConsulta.open) {
+    modalConsulta.showModal();
+    await carregarDivergencias();
+  }
+});
+
+btnFecharConsulta.addEventListener("click", () => {
+  modalConsulta.close();
+});
+
+// Fecha ao clicar fora da janela
+modalConsulta.addEventListener("click", (event) => {
+  if (event.target === modalConsulta) {
+    modalConsulta.close();
+  }
+});
+
+// Fecha com a tecla Esc
+modalConsulta.addEventListener("close", () => {
+  btnAbrirConsulta.focus();
+});
+
+
+
+
+

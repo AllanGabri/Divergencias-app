@@ -10,6 +10,7 @@ Rotas:
 import io
 import json
 import os
+import sqlite3
 import re
 import shutil
 import subprocess
@@ -30,6 +31,38 @@ from PIL import Image, ImageOps
 BASE = Path(__file__).resolve().parent
 DATA = BASE / "data"
 DATA.mkdir(exist_ok=True)
+
+DB_PATH = DATA / "divergencias.db"
+
+
+def inicializar_banco():
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS divergencias (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                data_registro TEXT NOT NULL,
+                empresa TEXT NOT NULL,
+                vendedor TEXT DEFAULT '',
+                nf TEXT DEFAULT '',
+                fornecedor TEXT DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'PENDENTE',
+                solucao TEXT DEFAULT '',
+                dados_json TEXT NOT NULL
+            )
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_divergencias_empresa
+            ON divergencias (empresa)
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_divergencias_status
+            ON divergencias (status)
+        """)
+
+
+inicializar_banco()
 
 # Caminho da planilha. Mude aqui ou defina a variável de ambiente DIVERGENCIAS_XLSX.
 XLSX_PATH = Path(
@@ -288,21 +321,173 @@ def gravar_planilha(d):
     return {"duplicada": False, "aba": nome_aba, "linha": linha}
 
 
+
 @app.post("/api/salvar")
 def api_salvar():
     d = request.get_json(force=True)
+
     if not d.get("empresa") or not d.get("nf") or not d.get("itens"):
         return jsonify(erro="Faltam dados (empresa, NF ou itens)."), 400
+
     try:
         r = gravar_planilha(d)
     except PermissionError:
-        return jsonify(erro="Não consegui gravar: feche a planilha no LibreOffice/Excel e tente de novo."), 423
+        return jsonify(
+            erro="Não consegui gravar: feche a planilha no LibreOffice/Excel e tente de novo."
+        ), 423
     except Exception as e:
         return jsonify(erro=f"Erro ao gravar a planilha: {e}"), 500
+
     if not r["duplicada"]:
-        gravar_memoria(d["empresa"].strip().upper(), d.get("vendedor", "").strip().upper(), str(d.get("fornecedor", "")).strip())
+        empresa = d["empresa"].strip().upper()
+        vendedor = str(d.get("vendedor", "")).strip().upper()
+        fornecedor = str(d.get("fornecedor", "")).strip()
+
+        try:
+            data_registro = (
+                d.get("data")
+                or d.get("data_conferencia")
+                or datetime.now().strftime("%Y-%m-%d")
+            )
+
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO divergencias (
+                        data_registro,
+                        empresa,
+                        vendedor,
+                        nf,
+                        fornecedor,
+                        status,
+                        solucao,
+                        dados_json
+                    )
+                    VALUES (?, ?, ?, ?, ?, 'PENDENTE', '', ?)
+                    """,
+                    (
+                        data_registro,
+                        empresa,
+                        vendedor,
+                        str(d.get("nf", "")),
+                        fornecedor,
+                        json.dumps(d, ensure_ascii=False),
+                    ),
+                )
+                id_divergencia = cursor.lastrowid
+
+            gravar_memoria(empresa, vendedor, fornecedor)
+
+        except Exception as e:
+            app.logger.exception("Erro ao salvar divergência no SQLite")
+            return jsonify(
+                erro=(
+                    "A planilha foi gravada, mas houve um erro ao salvar "
+                    f"no banco de dados: {e}"
+                ),
+                planilha_gravada=True,
+            ), 500
+
+        r["id_divergencia"] = id_divergencia
+
     r["caminho"] = str(XLSX_PATH)
     return jsonify(r)
+
+
+@app.get("/api/divergencias")
+def api_listar_divergencias():
+    data_inicio = request.args.get("data_inicio", "").strip()
+    data_fim = request.args.get("data_fim", "").strip()
+    empresa = request.args.get("empresa", "").strip()
+    vendedor = request.args.get("vendedor", "").strip()
+    status = request.args.get("status", "").strip().upper()
+
+    sql = "SELECT * FROM divergencias WHERE 1=1"
+    parametros = []
+
+    if data_inicio:
+        sql += " AND date(data_registro) >= date(?)"
+        parametros.append(data_inicio)
+
+    if data_fim:
+        sql += " AND date(data_registro) <= date(?)"
+        parametros.append(data_fim)
+
+    if empresa:
+        sql += " AND empresa LIKE ?"
+        parametros.append(f"%{empresa}%")
+
+    if vendedor:
+        sql += " AND vendedor LIKE ?"
+        parametros.append(f"%{vendedor}%")
+
+    if status in ("PENDENTE", "OK"):
+        sql += " AND status = ?"
+        parametros.append(status)
+
+    sql += " ORDER BY id DESC"
+
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            registros = conn.execute(sql, parametros).fetchall()
+
+        resultado = []
+        for registro in registros:
+            item = dict(registro)
+            try:
+                item["dados"] = json.loads(item.pop("dados_json"))
+            except (ValueError, TypeError):
+                item["dados"] = {}
+
+            resultado.append(item)
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        app.logger.exception("Erro ao consultar divergências")
+        return jsonify(erro=f"Erro ao consultar divergências: {e}"), 500
+
+
+@app.post("/api/divergencias/<int:id_divergencia>/status")
+def api_atualizar_status_divergencia(id_divergencia):
+    d = request.get_json(silent=True) or {}
+
+    status = str(d.get("status", "")).strip().upper()
+    solucao = str(d.get("solucao", "")).strip()
+
+    if status not in ("PENDENTE", "OK"):
+        return jsonify(erro="Status inválido."), 400
+
+    if status == "OK" and not solucao:
+        return jsonify(
+            erro="Descreva como a divergência foi resolvida."
+        ), 400
+
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.execute(
+                """
+                UPDATE divergencias
+                SET status = ?, solucao = ?
+                WHERE id = ?
+                """,
+                (status, solucao, id_divergencia),
+            )
+
+            if cursor.rowcount == 0:
+                return jsonify(erro="Divergência não encontrada."), 404
+
+        return jsonify(
+            sucesso=True,
+            id=id_divergencia,
+            status=status,
+            solucao=solucao,
+        )
+
+    except Exception as e:
+        app.logger.exception("Erro ao atualizar divergência")
+        return jsonify(erro=f"Erro ao atualizar status: {e}"), 500
 
 
 # --------------------------------------------------------------------- páginas

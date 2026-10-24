@@ -1,0 +1,11 @@
+{
+  "empresas": [
+    "CBB"
+  ],
+  "vendedores": [
+    "JEFERSON"
+  ],
+  "fornecedores": {
+    "2512": "CBB"
+  }
+}
