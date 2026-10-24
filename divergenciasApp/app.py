@@ -230,7 +230,7 @@ BORDA = Border(*(Side(style="thin"),) * 4)
 CINZA = PatternFill("solid", fgColor="999999")
 CINZA_CAB = PatternFill("solid", fgColor="CCCCCC")
 VERDE = PatternFill("solid", fgColor="99FF66")
-AMARELO = PatternFill("solid", fgColor="FFFF66")
+BRANCO = PatternFill("solid", fgColor="FFFFFF")
 
 
 def criar_planilha(caminho: Path):
@@ -300,7 +300,7 @@ def gravar_planilha(d):
                 estilo_padrao(cel)
             cel.value = val
         ws.cell(row=linha, column=2).number_format = "dd/mm/yy"
-        ws.cell(row=linha, column=4).fill = AMARELO
+        ws.cell(row=linha, column=4).fill = BRANCO
         # a linha anterior pode estar verde ("OK"); aqui sempre nasce pendente.
         ws.cell(row=linha, column=5).fill = PatternFill(fill_type=None)
         ws.cell(row=linha, column=6).fill = PatternFill(fill_type=None)

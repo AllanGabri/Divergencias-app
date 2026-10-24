@@ -2878,6 +2878,22 @@
    'C:\\Users\\estoque '
    '3\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\socketserver.py',
    'PYMODULE'),
+  ('sqlite3',
+   'C:\\Users\\estoque '
+   '3\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\sqlite3\\__init__.py',
+   'PYMODULE'),
+  ('sqlite3.__main__',
+   'C:\\Users\\estoque '
+   '3\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\sqlite3\\__main__.py',
+   'PYMODULE'),
+  ('sqlite3.dbapi2',
+   'C:\\Users\\estoque '
+   '3\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\sqlite3\\dbapi2.py',
+   'PYMODULE'),
+  ('sqlite3.dump',
+   'C:\\Users\\estoque '
+   '3\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\sqlite3\\dump.py',
+   'PYMODULE'),
   ('ssl',
    'C:\\Users\\estoque '
    '3\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\ssl.py',
