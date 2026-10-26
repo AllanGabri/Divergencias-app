@@ -742,3 +742,7 @@ dialog h2 {
 .rm-imagem {
   cursor: pointer;
 }
+
+.rm-imagem:hover{
+  background-color: rgba(198, 40, 40, 0.5);
+}

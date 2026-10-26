@@ -26,7 +26,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.comments import Comment
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.datavalidation import DataValidation
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageEnhance, ImageFilter
 
 BASE = Path(__file__).resolve().parent
 DATA = BASE / "data"
@@ -124,12 +124,27 @@ def rodar_ocr(img: Image.Image, psm: int) -> str:
         return r.stdout
 
 
+
 def preparar(img: Image.Image) -> Image.Image:
+    # Corrige a orientação e converte para escala de cinza
     img = ImageOps.exif_transpose(img).convert("L")
-    if img.width < 2400:
-        f = 2 if img.width < 1600 else 1.5
-        img = img.resize((int(img.width * f), int(img.height * f)), Image.LANCZOS)
-    return ImageOps.autocontrast(img)
+
+    # Aumenta a resolução para facilitar a leitura de textos pequenos
+    if img.width < 2000:
+        fator = 2000 / img.width
+        img = img.resize(
+            (2000, int(img.height * fator)),
+            Image.Resampling.LANCZOS
+        )
+
+    # Melhora contraste e nitidez
+    img = ImageOps.autocontrast(img, cutoff=1)
+    img = ImageEnhance.Contrast(img).enhance(1.5)
+    img = ImageEnhance.Sharpness(img).enhance(1.5)
+    img = img.filter(ImageFilter.UnsharpMask(radius=1, percent=130, threshold=3))
+
+    return img
+
 
 
 RE_ITEM = re.compile(
@@ -141,6 +156,40 @@ RE_NF = re.compile(r"N[uúü]mero\W{0,6}(\d{3,10})", re.IGNORECASE)
 RE_FORN = re.compile(r"F[oó0]\w{0,4}\W{1,3}(?:\S{1,2}\s+)?(\d{3,8})", re.IGNORECASE)
 
 
+
+
+
+import re
+
+
+import re
+
+def corrigir_nome_produto(nome: str) -> str:
+    # Separa o nome em palavras, preservando os espaços
+    palavras = re.split(r'(\s+)', nome.strip())
+
+    for i, palavra in enumerate(palavras):
+        # Ignora espaços
+        if not palavra or palavra.isspace():
+            continue
+
+        # Preserva medidas e tokens numéricos, como 45G, 90G, 100G e 114G
+        if re.fullmatch(r'\d+(?:[.,]\d+)?(?:MG|G|KG|ML|L|CM|MM)?',
+                        palavra.upper()):
+            continue
+
+        # Corrige caracteres confundidos pelo OCR nos nomes
+        if re.search(r'[A-Za-zÀ-ÿ]', palavra):
+            palavra = palavra.replace('4', 'A')
+            palavra = palavra.replace('0', 'O')
+
+        palavras[i] = palavra
+
+    return ''.join(palavras)
+
+
+
+
 def interpretar(texto: str):
     itens = []
     for linha in texto.splitlines():
@@ -150,6 +199,7 @@ def interpretar(texto: str):
         lanc, conf, cod, nome = m.groups()
         cod = re.sub(r"\D", "", cod)
         nome = re.sub(r"[\s,.;|]+$", "", nome).strip()
+        nome = corrigir_nome_produto(nome)
         itens.append({
             "codigo": cod,
             "nome": nome,
@@ -161,28 +211,57 @@ def interpretar(texto: str):
     return itens, (nf.group(1) if nf else ""), (forn.group(1) if forn else "")
 
 
+
 @app.post("/api/ocr")
 def api_ocr():
     arq = request.files.get("imagem")
+
     if not arq:
         return jsonify(erro="Nenhuma imagem enviada."), 400
+
     try:
         img = preparar(Image.open(io.BytesIO(arq.read())))
-        itens, nf, forn, bruto = [], "", "", ""
-        # psm 11 (texto esparso) costuma ler melhor essa tela; psm 6 fica de reserva
-        for psm in (11, 6):
+
+        melhor_itens = []
+        melhor_nf = ""
+        melhor_forn = ""
+        melhor_texto = ""
+        melhor_pontuacao = -1
+
+        # Testa modos adequados para telas com linhas e tabelas
+        for psm in (6, 11):
             bruto = rodar_ocr(img, psm)
-            i, n, f = interpretar(bruto)
-            if len(i) > len(itens):
-                itens = i
-            nf = nf or n
-            forn = forn or f
-            if itens and nf:
-                break
+            itens_lidos, nf_lida, forn_lido = interpretar(bruto)
+
+            # Prioriza a quantidade de itens reconhecidos
+            pontuacao = len(itens_lidos)
+
+            if nf_lida:
+                pontuacao += 0.25
+            if forn_lido:
+                pontuacao += 0.25
+
+            if pontuacao > melhor_pontuacao:
+                melhor_pontuacao = pontuacao
+                melhor_itens = itens_lidos
+                melhor_nf = nf_lida
+                melhor_forn = forn_lido
+                melhor_texto = bruto
+
     except RuntimeError as e:
         return jsonify(erro=str(e)), 500
-    except Exception as e:  # imagem inválida etc.
+    except Exception as e:
         return jsonify(erro=f"Não consegui ler a imagem: {e}"), 400
+
+    mem = ler_memoria()
+
+    return jsonify(
+        nf=melhor_nf,
+        fornecedor=melhor_forn,
+        empresa_sugerida=mem["fornecedores"].get(melhor_forn, ""),
+        itens=melhor_itens,
+        texto_bruto=melhor_texto,
+    )
 
     mem = ler_memoria()
     return jsonify(
