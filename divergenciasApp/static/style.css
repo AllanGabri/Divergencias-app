@@ -757,21 +757,34 @@ dialog h2 {
   margin: 3px;
 }
 
-.btn-excluir {
+/* Botão Excluir */
+#secConsulta button.btn-excluir {
   color: #b42318;
-  background: #fff;
+  background-color: #ffffff;
   border: 1px solid #f0b4ae;
   border-radius: 5px;
   padding: 6px 10px;
   cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
 }
 
-.btn-excluir:hover {
-  background: #fff0ee;
+
+#secConsulta button.btn-excluir:hover {
+  background-color: #b42318;
+  color: #ffffff;
   border-color: #b42318;
 }
 
-.btn-excluir:disabled {
+#secConsulta button.btn-excluir:active {
+  background-color: #8f1d14;
+  border-color: #8f1d14;
+}
+
+
+#secConsulta button.btn-excluir:disabled {
   opacity: 0.6;
   cursor: wait;
 }
