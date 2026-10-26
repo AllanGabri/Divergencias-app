@@ -124,12 +124,19 @@ def rodar_ocr(img: Image.Image, psm: int) -> str:
         return r.stdout
 
 
+def preparar_simples(img: Image.Image) -> Image.Image:
+    """Pré-processamento leve (o que já lia bem as sobras)."""
+    img = ImageOps.exif_transpose(img).convert("L")
+    if img.width < 2400:
+        f = 2 if img.width < 1600 else 1.5
+        img = img.resize((int(img.width * f), int(img.height * f)), Image.LANCZOS)
+    return ImageOps.autocontrast(img)
 
-def preparar(img: Image.Image) -> Image.Image:
-    # Corrige a orientação e converte para escala de cinza
+
+def preparar_reforcado(img: Image.Image) -> Image.Image:
+    """Pré-processamento com mais contraste/nitidez (ajuda em textos pequenos)."""
     img = ImageOps.exif_transpose(img).convert("L")
 
-    # Aumenta a resolução para facilitar a leitura de textos pequenos
     if img.width < 2000:
         fator = 2000 / img.width
         img = img.resize(
@@ -137,57 +144,45 @@ def preparar(img: Image.Image) -> Image.Image:
             Image.Resampling.LANCZOS
         )
 
-    # Melhora contraste e nitidez
     img = ImageOps.autocontrast(img, cutoff=1)
     img = ImageEnhance.Contrast(img).enhance(1.5)
     img = ImageEnhance.Sharpness(img).enhance(1.5)
     img = img.filter(ImageFilter.UnsharpMask(radius=1, percent=130, threshold=3))
-
     return img
 
 
+# Os números de quantidade aceitam O/o/I/l/S porque o OCR costuma confundir
+# o "0" (ex.: Lançada: 0 numa sobra) com a letra O.
+NUM = r"([\dOoIlS]{1,5})"
 
 RE_ITEM = re.compile(
-    r"Qtd\.?\s*[A-Za-z]{3,10}\s*:?\s*(\d+)\s*[-–—]\s*[A-Za-z]{3,12}\s*:?\s*(\d+)\s*"
-    r"Prod\w*\s*:?\s*([\d ]{8,18}?)\s*[-–—]\s*(.+)",
+    r"Qtd\.?\s*[A-Za-z]{3,10}\s*[:;.]?\s*" + NUM + r"\s*[-–—]\s*[A-Za-z]{3,12}\s*[:;.]?\s*" + NUM + r"\s*"
+    r"Prod\w*\s*[:;.]?\s*([\d ]{8,18}?)\s*[-–—]\s*(.+)",
     re.IGNORECASE,
 )
 RE_NF = re.compile(r"N[uúü]mero\W{0,6}(\d{3,10})", re.IGNORECASE)
 RE_FORN = re.compile(r"F[oó0]\w{0,4}\W{1,3}(?:\S{1,2}\s+)?(\d{3,8})", re.IGNORECASE)
 
+_TROCA_NUM = str.maketrans({"O": "0", "o": "0", "I": "1", "l": "1", "S": "5"})
 
 
+def para_inteiro(txt: str) -> int:
+    return int(txt.translate(_TROCA_NUM))
 
-
-import re
-
-
-import re
 
 def corrigir_nome_produto(nome: str) -> str:
-    # Separa o nome em palavras, preservando os espaços
-    palavras = re.split(r'(\s+)', nome.strip())
+    """Corrige '4'->'A' e '0'->'O' apenas dentro de palavras (entre letras),
+    sem mexer em medidas como 200ML, 45G, 100G."""
+    def trocar(m):
+        palavra = m.group(0)
+        # palavra com número de 2+ dígitos é medida/código: preserva
+        if re.search(r"\d{2,}", palavra):
+            return palavra
+        palavra = re.sub(r"(?<=[A-Za-zÀ-ÿ])4(?=[A-Za-zÀ-ÿ])", "A", palavra)
+        palavra = re.sub(r"(?<=[A-Za-zÀ-ÿ])0(?=[A-Za-zÀ-ÿ])", "O", palavra)
+        return palavra
 
-    for i, palavra in enumerate(palavras):
-        # Ignora espaços
-        if not palavra or palavra.isspace():
-            continue
-
-        # Preserva medidas e tokens numéricos, como 45G, 90G, 100G e 114G
-        if re.fullmatch(r'\d+(?:[.,]\d+)?(?:MG|G|KG|ML|L|CM|MM)?',
-                        palavra.upper()):
-            continue
-
-        # Corrige caracteres confundidos pelo OCR nos nomes
-        if re.search(r'[A-Za-zÀ-ÿ]', palavra):
-            palavra = palavra.replace('4', 'A')
-            palavra = palavra.replace('0', 'O')
-
-        palavras[i] = palavra
-
-    return ''.join(palavras)
-
-
+    return re.sub(r"\S+", trocar, nome.strip())
 
 
 def interpretar(texto: str):
@@ -200,16 +195,71 @@ def interpretar(texto: str):
         cod = re.sub(r"\D", "", cod)
         nome = re.sub(r"[\s,.;|]+$", "", nome).strip()
         nome = corrigir_nome_produto(nome)
+        try:
+            lanc_i = para_inteiro(lanc)
+            conf_i = para_inteiro(conf)
+        except ValueError:
+            continue
         itens.append({
             "codigo": cod,
             "nome": nome,
-            "lancada": int(lanc),
-            "conferida": int(conf),
+            "lancada": lanc_i,
+            "conferida": conf_i,
         })
     nf = RE_NF.search(texto)
     forn = RE_FORN.search(texto)
     return itens, (nf.group(1) if nf else ""), (forn.group(1) if forn else "")
 
+
+def ean13_valido(cod: str) -> bool:
+    if len(cod) != 13 or not cod.isdigit():
+        return False
+    soma = sum(int(c) * (3 if i % 2 else 1) for i, c in enumerate(cod[:12]))
+    return (10 - soma % 10) % 10 == int(cod[12])
+
+
+def _distancia(a: str, b: str) -> int:
+    if len(a) != len(b):
+        return 99
+    return sum(x != y for x, y in zip(a, b))
+
+
+def agrupar_itens(candidatos):
+    """Une leituras do mesmo item feitas em passagens diferentes do OCR.
+    Mesmo item = mesmas quantidades e código quase igual (até 2 dígitos
+    trocados). Dentro do grupo, escolhe o código com dígito verificador
+    EAN-13 válido; se não houver, o mais repetido."""
+    grupos = []
+    for it in candidatos:
+        for g in grupos:
+            base = g[0]
+            if (base["lancada"] == it["lancada"]
+                    and base["conferida"] == it["conferida"]
+                    and _distancia(base["codigo"], it["codigo"]) <= 2):
+                g.append(it)
+                break
+        else:
+            grupos.append([it])
+
+    resultado = []
+    for g in grupos:
+        contagem = {}
+        for it in g:
+            contagem[it["codigo"]] = contagem.get(it["codigo"], 0) + 1
+        codigos = sorted(contagem, key=lambda c: (ean13_valido(c), contagem[c]), reverse=True)
+        cod = codigos[0]
+        do_codigo = [it for it in g if it["codigo"] == cod]
+        nomes = {}
+        for it in do_codigo:
+            nomes[it["nome"]] = nomes.get(it["nome"], 0) + 1
+        nome = max(nomes, key=nomes.get)
+        resultado.append({
+            "codigo": cod,
+            "nome": nome,
+            "lancada": g[0]["lancada"],
+            "conferida": g[0]["conferida"],
+        })
+    return resultado
 
 
 @app.post("/api/ocr")
@@ -220,33 +270,30 @@ def api_ocr():
         return jsonify(erro="Nenhuma imagem enviada."), 400
 
     try:
-        img = preparar(Image.open(io.BytesIO(arq.read())))
+        original = Image.open(io.BytesIO(arq.read()))
+        original.load()
 
-        melhor_itens = []
-        melhor_nf = ""
-        melhor_forn = ""
-        melhor_texto = ""
-        melhor_pontuacao = -1
+        # Roda as duas preparações × os dois modos de leitura e JUNTA os itens
+        # encontrados em cada tentativa (por código). Assim, um item (como uma
+        # sobra) que uma leitura perdeu é recuperado pela outra.
+        candidatos = []
+        nf_final = ""
+        forn_final = ""
+        texto_final = ""
 
-        # Testa modos adequados para telas com linhas e tabelas
-        for psm in (6, 11):
-            bruto = rodar_ocr(img, psm)
-            itens_lidos, nf_lida, forn_lido = interpretar(bruto)
+        for preparo in (preparar_simples, preparar_reforcado):
+            img = preparo(original)
+            for psm in (11, 6):
+                bruto = rodar_ocr(img, psm)
+                itens_lidos, nf_lida, forn_lido = interpretar(bruto)
 
-            # Prioriza a quantidade de itens reconhecidos
-            pontuacao = len(itens_lidos)
+                if len(bruto) > len(texto_final):
+                    texto_final = bruto
+                nf_final = nf_final or nf_lida
+                forn_final = forn_final or forn_lido
+                candidatos.extend(itens_lidos)
 
-            if nf_lida:
-                pontuacao += 0.25
-            if forn_lido:
-                pontuacao += 0.25
-
-            if pontuacao > melhor_pontuacao:
-                melhor_pontuacao = pontuacao
-                melhor_itens = itens_lidos
-                melhor_nf = nf_lida
-                melhor_forn = forn_lido
-                melhor_texto = bruto
+        melhor_itens = agrupar_itens(candidatos)
 
     except RuntimeError as e:
         return jsonify(erro=str(e)), 500
@@ -256,20 +303,11 @@ def api_ocr():
     mem = ler_memoria()
 
     return jsonify(
-        nf=melhor_nf,
-        fornecedor=melhor_forn,
-        empresa_sugerida=mem["fornecedores"].get(melhor_forn, ""),
+        nf=nf_final,
+        fornecedor=forn_final,
+        empresa_sugerida=mem["fornecedores"].get(forn_final, ""),
         itens=melhor_itens,
-        texto_bruto=melhor_texto,
-    )
-
-    mem = ler_memoria()
-    return jsonify(
-        nf=nf,
-        fornecedor=forn,
-        empresa_sugerida=mem["fornecedores"].get(forn, ""),
-        itens=itens,
-        texto_bruto=bruto,
+        texto_bruto=texto_final,
     )
 
 
@@ -400,7 +438,6 @@ def gravar_planilha(d):
     return {"duplicada": False, "aba": nome_aba, "linha": linha}
 
 
-
 @app.post("/api/salvar")
 def api_salvar():
     d = request.get_json(force=True)
@@ -526,32 +563,6 @@ def api_listar_divergencias():
     except Exception as e:
         app.logger.exception("Erro ao consultar divergências")
         return jsonify(erro=f"Erro ao consultar divergências: {e}"), 500
-
-
-@app.delete("/api/divergencias/<int:id_divergencia>")
-def api_excluir_divergencia(id_divergencia):
-    try:
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.execute(
-                "DELETE FROM divergencias WHERE id = ?",
-                (id_divergencia,)
-            )
-
-            if cursor.rowcount == 0:
-                return jsonify(
-                    erro="Divergência não encontrada."
-                ), 404
-
-        return jsonify(
-            sucesso=True,
-            mensagem="Divergência excluída com sucesso."
-        )
-
-    except Exception as e:
-        app.logger.exception("Erro ao excluir divergência")
-        return jsonify(
-            erro=f"Erro ao excluir divergência: {e}"
-        ), 500
 
 
 @app.post("/api/divergencias/<int:id_divergencia>/status")
