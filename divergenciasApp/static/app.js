@@ -19,7 +19,7 @@ const MOTIVOS = [
   ["sobra", "Sobra"],
 ];
 
-let imagem = null; // File/Blob do print
+let imagens = []; // File/Blob do print
 let itens = []; // itens divergentes
 let fornecedor = ""; // código do fornecedor lido do print
 let empresaSugerida = "";
@@ -42,65 +42,221 @@ async function carregarMemoria() {
 }
 
 // ------------------------------------------------------------ 1. print
-function definirImagem(file) {
-  if (!file || !file.type.startsWith("image/")) return;
-  imagem = file;
-  const prev = $("preview");
-  prev.src = URL.createObjectURL(file);
-  prev.hidden = false;
-  $("btnLer").disabled = false;
-  $("msgOcr").textContent = "";
+// ------------------------------------------------------------
+// Seleção de múltiplas imagens
+// ------------------------------------------------------------
+
+function adicionarImagens(arquivos) {
+    const novas = Array.from(arquivos || []).filter(
+        file => file && file.type.startsWith("image/")
+    );
+
+    if (!novas.length) return;
+
+    imagens.push(...novas);
+
+    renderPreviews();
+
+    $("btnLer").disabled = imagens.length === 0;
+
+    $("msgOcr").textContent =
+        `${imagens.length} imagem(ns) selecionada(s).`;
 }
 
-$("drop").addEventListener("click", () => $("arquivo").click());
-$("arquivo").addEventListener("change", (e) =>
-  definirImagem(e.target.files[0]),
-);
-$("drop").addEventListener("dragover", (e) => {
-  e.preventDefault();
-  $("drop").classList.add("over");
-});
-$("drop").addEventListener("dragleave", () =>
-  $("drop").classList.remove("over"),
-);
-$("drop").addEventListener("drop", (e) => {
-  e.preventDefault();
-  $("drop").classList.remove("over");
-  definirImagem(e.dataTransfer.files[0]);
-});
-document.addEventListener("paste", (e) => {
-  for (const it of e.clipboardData?.items || []) {
-    if (it.type.startsWith("image/")) {
-      definirImagem(it.getAsFile());
-      break;
-    }
-  }
+function renderPreviews() {
+    $("previews").innerHTML = imagens.map((file, i) => `
+        <div class="preview-item">
+            <img
+                src="${URL.createObjectURL(file)}"
+                alt="Prévia da imagem ${i + 1}"
+            >
+
+            <div class="preview-info">
+                <span>Imagem ${i + 1}</span>
+
+                <button
+                    type="button"
+                    class="rm-imagem"
+                    data-remover-imagem="${i}"
+                    aria-label="Remover imagem ${i + 1}"
+                >×</button>
+            </div>
+
+            <small>${esc(file.name || "Imagem colada")}</small>
+        </div>
+    `).join("");
+}
+
+// Remover uma imagem selecionada
+$("previews").addEventListener("click", e => {
+    const botao = e.target.closest("[data-remover-imagem]");
+
+    if (!botao) return;
+
+    imagens.splice(Number(botao.dataset.removerImagem), 1);
+
+    renderPreviews();
+
+    $("btnLer").disabled = imagens.length === 0;
+
+    $("msgOcr").textContent = imagens.length
+        ? `${imagens.length} imagem(ns) selecionada(s).`
+        : "Nenhuma imagem selecionada.";
 });
 
+// Selecionar arquivos pelo clique
+$("drop").addEventListener("click", e => {
+    if (e.target.closest(".rm-imagem")) return;
+
+    $("arquivo").click();
+});
+
+$("arquivo").addEventListener("change", e => {
+    adicionarImagens(e.target.files);
+
+    // Permite selecionar novamente o mesmo arquivo
+    e.target.value = "";
+});
+
+// Arrastar e soltar imagens
+$("drop").addEventListener("dragover", e => {
+    e.preventDefault();
+    $("drop").classList.add("over");
+});
+
+$("drop").addEventListener("dragleave", () => {
+    $("drop").classList.remove("over");
+});
+
+$("drop").addEventListener("drop", e => {
+    e.preventDefault();
+
+    $("drop").classList.remove("over");
+
+    adicionarImagens(e.dataTransfer.files);
+});
+
+// Colar imagens usando Ctrl + V
+document.addEventListener("paste", e => {
+    const arquivos = [];
+
+    for (const item of e.clipboardData?.items || []) {
+        if (item.type.startsWith("image/")) {
+            arquivos.push(item.getAsFile());
+        }
+    }
+
+    adicionarImagens(arquivos);
+});
+
+// ------------------------------------------------------------
+// Ler todas as imagens
+// ------------------------------------------------------------
+
 $("btnLer").addEventListener("click", async () => {
-  $("btnLer").disabled = true;
-  $("msgOcr").textContent = "Lendo o print…";
-  const fd = new FormData();
-  fd.append("imagem", imagem, imagem.name || "print.png");
-  try {
-    const r = await fetch("/api/ocr", { method: "POST", body: fd });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.erro || "Erro ao ler o print.");
-    $("nf").value = d.nf;
-    $("forn").value = d.fornecedor;
-    empresaSugerida = d.empresa_sugerida || "";
-    itens = d.itens.map(novoItem);
-    $("msgOcr").textContent = itens.length
-      ? `${itens.length} item(ns) divergente(s) encontrado(s).`
-      : "Não encontrei itens no print. Confira a imagem ou adicione os itens manualmente.";
-    $("secItens").hidden = false;
-    $("secTextos").hidden = true;
-    renderItens();
-  } catch (err) {
-    $("msgOcr").textContent = err.message;
-  } finally {
-    $("btnLer").disabled = false;
-  }
+    if (!imagens.length) return;
+
+    $("btnLer").disabled = true;
+
+    let todosItens = [];
+    let nf = "";
+    let forn = "";
+    let empresa = "";
+
+    const erros = [];
+
+    try {
+        for (let i = 0; i < imagens.length; i++) {
+            $("msgOcr").textContent =
+                `Lendo imagem ${i + 1} de ${imagens.length}...`;
+
+            const fd = new FormData();
+            const imagem = imagens[i];
+
+            fd.append(
+                "imagem",
+                imagem,
+                imagem.name || `print-${i + 1}.png`
+            );
+
+            try {
+                const resposta = await fetch("/api/ocr", {
+                    method: "POST",
+                    body: fd
+                });
+
+                const dados = await resposta.json();
+
+                if (!resposta.ok) {
+                    throw new Error(
+                        dados.erro || "Erro ao ler a imagem."
+                    );
+                }
+
+                // Aproveita os dados identificados
+                if (!nf) nf = dados.nf || "";
+                if (!forn) forn = dados.fornecedor || "";
+
+                if (!empresa) {
+                    empresa = dados.empresa_sugerida || "";
+                }
+
+                // Acumula os itens de cada imagem
+                todosItens.push(...(dados.itens || []));
+
+            } catch (erro) {
+                erros.push(
+                    `Imagem ${i + 1}: ${erro.message}`
+                );
+            }
+        }
+
+        $("nf").value = nf;
+        $("forn").value = forn;
+
+        empresaSugerida = empresa;
+
+        // Remove itens rigorosamente duplicados
+        const vistos = new Set();
+
+        const itensUnicos = todosItens.filter(item => {
+            const chave = JSON.stringify([
+                item.codigo,
+                item.nome,
+                item.lancada,
+                item.conferida
+            ]);
+
+            if (vistos.has(chave)) return false;
+
+            vistos.add(chave);
+            return true;
+        });
+
+        itens = itensUnicos.map(novoItem);
+
+        let mensagem = itens.length
+            ? `${itens.length} item(ns) divergente(s) encontrado(s) em ${imagens.length} imagem(ns).`
+            : "Não encontrei itens. Confira as imagens ou adicione os itens manualmente.";
+
+        if (erros.length) {
+            mensagem += " " + erros.join(" | ");
+        }
+
+        $("msgOcr").textContent = mensagem;
+
+        $("secItens").hidden = false;
+        $("secTextos").hidden = true;
+
+        renderItens();
+
+    } catch (erro) {
+        $("msgOcr").textContent =
+            erro.message || "Erro ao processar as imagens.";
+
+    } finally {
+        $("btnLer").disabled = imagens.length === 0;
+    }
 });
 
 // ------------------------------------------------------------ 2. itens
@@ -398,17 +554,28 @@ async function salvar(forcar = false) {
 $("btnSalvar").addEventListener("click", () => salvar(false));
 
 $("btnNovo").addEventListener("click", () => {
-  imagem = null;
-  itens = [];
-  ultimo = null;
-  $("preview").hidden = true;
-  $("preview").src = "";
-  $("arquivo").value = "";
-  $("btnLer").disabled = true;
-  $("msgOcr").textContent = "";
-  $("secItens").hidden = true;
-  $("secTextos").hidden = true;
-  window.scrollTo({ top: 0, behavior: "smooth" });
+    imagens = [];
+    itens = [];
+    ultimo = null;
+
+    $("previews").innerHTML = "";
+    $("arquivo").value = "";
+
+    $("btnLer").disabled = true;
+    $("msgOcr").textContent = "";
+
+    $("nf").value = "";
+    $("forn").value = "";
+
+    empresaSugerida = "";
+
+    $("secItens").hidden = true;
+    $("secTextos").hidden = true;
+
+    window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+    });
 });
 
 carregarMemoria();

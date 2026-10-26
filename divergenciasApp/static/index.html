@@ -14,7 +14,6 @@
     </header>
 
     <main>
-      
       <!-- 1. PRINT -->
       <section class="card">
         <h2>Print da conferência</h2>
@@ -23,8 +22,9 @@
             <strong>Cole o print aqui (Ctrl+V)</strong>, arraste a imagem ou
             clique para escolher o arquivo.
           </p>
-          <input type="file" id="arquivo" accept="image/*" hidden />
-          <img id="preview" alt="" hidden />
+
+          <input type="file" id="arquivo" accept="image/*" multiple hidden />
+          <div id="previews" class="previews"></div>
         </div>
         <div class="row">
           <button id="btnLer" class="primary" disabled>Ler print</button>
@@ -107,116 +107,108 @@
     <!-- CONSULTA DE DIVERGÊNCIAS -->
     <dialog id="modalConsulta" class="modal-consulta">
       <h2>Consultar divergências</h2>
-     <div class="modal-cabecalho">
+      <div class="modal-cabecalho">
         <h2>Consultar divergências</h2>
         <button type="button" id="btnFecharConsulta" aria-label="Fechar">
-            ✕
-        </button>
-    </div>
-
-    <section class="card" id="secConsulta" hidden>
-      <div class="row" style="flex-wrap: wrap; gap: 12px">
-        <label>
-          Data inicial
-          <input type="date" id="filtroDataInicio" />
-        </label>
-
-        <label>
-          Data final
-          <input type="date" id="filtroDataFim" />
-        </label>
-
-        <label>
-          Empresa
-          <input
-            type="text"
-            id="filtroEmpresa"
-            placeholder="Empresa"
-          />
-        </label>
-
-        <label>
-          Vendedor
-          <input
-            type="text"
-            id="filtroVendedor"
-            placeholder="Vendedor(a)"
-          />
-        </label>
-
-        <label>
-          Status
-          <select id="filtroStatus">
-            <option value="">Todos</option>
-            <option value="PENDENTE">Pendente</option>
-            <option value="OK">Resolvida (OK)</option>
-          </select>
-        </label>
-      </div>
-
-      <div class="row" style="margin-top: 12px; gap: 8px">
-        <button type="button" class="primary" id="btnFiltrarDivergencias">
-          Filtrar
-        </button>
-        <button type="button" class="ghost" id="btnLimparFiltros">
-          Limpar filtros
-        </button>
-        <button type="button" class="ghost" id="btnAtualizarDivergencias">
-          Atualizar lista
+          ✕
         </button>
       </div>
 
-      <p id="consultaMensagem" class="muted" role="status"></p>
+      <section class="card" id="secConsulta" hidden>
+        <div class="row" style="flex-wrap: wrap; gap: 12px">
+          <label>
+            Data inicial
+            <input type="date" id="filtroDataInicio" />
+          </label>
 
-      <div style="overflow-x: auto; margin-top: 12px">
-        <table style="width: 100%; border-collapse: collapse">
-          <thead>
-            <tr>
-              <th>Data</th>
-              <th>Empresa</th>
-              <th>Vendedor</th>
-              <th>NF</th>
-              <th>Status</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody id="tabelaDivergencias">
-            <tr>
-              <td colspan="6">Carregando divergências...</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+          <label>
+            Data final
+            <input type="date" id="filtroDataFim" />
+          </label>
 
-      <div id="detalheDivergencia" hidden style="margin-top: 20px">
-        <h3>Detalhes da divergência</h3>
-        <div id="detalheConteudo"></div>
+          <label>
+            Empresa
+            <input type="text" id="filtroEmpresa" placeholder="Empresa" />
+          </label>
 
-        <label for="solucaoDivergencia">
-          Como a divergência foi resolvida?
-        </label>
-        <textarea
-          id="solucaoDivergencia"
-          rows="3"
-          style="width: 100%"
-          placeholder="Descreva a solução aplicada..."
-        ></textarea>
+          <label>
+            Vendedor
+            <input type="text" id="filtroVendedor" placeholder="Vendedor(a)" />
+          </label>
 
-        <div class="row" style="margin-top: 10px; gap: 8px">
-          <button type="button" class="primary" id="btnResolverDivergencia">
-            Marcar como resolvida
+          <label>
+            Status
+            <select id="filtroStatus">
+              <option value="">Todos</option>
+              <option value="PENDENTE">Pendente</option>
+              <option value="OK">Resolvida (OK)</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="row" style="margin-top: 12px; gap: 8px">
+          <button type="button" class="primary" id="btnFiltrarDivergencias">
+            Filtrar
           </button>
-          <button type="button" class="ghost" id="btnReabrirDivergencia">
-            Marcar como pendente
+          <button type="button" class="ghost" id="btnLimparFiltros">
+            Limpar filtros
           </button>
-          <button type="button" class="ghost" id="btnFecharDetalhe">
-            Fechar detalhes
+          <button type="button" class="ghost" id="btnAtualizarDivergencias">
+            Atualizar lista
           </button>
         </div>
-        <p id="detalheMensagem" class="muted" role="status"></p>
-      </div>
-    </section>
- </dialog>
+
+        <p id="consultaMensagem" class="muted" role="status"></p>
+
+        <div style="overflow-x: auto; margin-top: 12px">
+          <table style="width: 100%; border-collapse: collapse">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Empresa</th>
+                <th>Vendedor</th>
+                <th>NF</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tabelaDivergencias">
+              <tr>
+                <td colspan="6">Carregando divergências...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div id="detalheDivergencia" hidden style="margin-top: 20px">
+          <h3>Detalhes da divergência</h3>
+          <div id="detalheConteudo"></div>
+
+          <label for="solucaoDivergencia">
+            Como a divergência foi resolvida?
+          </label>
+          <textarea
+            id="solucaoDivergencia"
+            rows="3"
+            style="width: 100%"
+            placeholder="Descreva a solução aplicada..."
+          ></textarea>
+
+          <div class="row" style="margin-top: 10px; gap: 8px">
+            <button type="button" class="primary" id="btnResolverDivergencia">
+              Marcar como resolvida
+            </button>
+            <button type="button" class="ghost" id="btnReabrirDivergencia">
+              Marcar como pendente
+            </button>
+            <button type="button" class="ghost" id="btnFecharDetalhe">
+              Fechar detalhes
+            </button>
+          </div>
+          <p id="detalheMensagem" class="muted" role="status"></p>
+        </div>
+      </section>
+    </dialog>
 
     <script src="/static/app.js"></script>
   </body>
