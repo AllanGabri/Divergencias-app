@@ -47,24 +47,25 @@ async function carregarMemoria() {
 // ------------------------------------------------------------
 
 function adicionarImagens(arquivos) {
-    const novas = Array.from(arquivos || []).filter(
-        file => file && file.type.startsWith("image/")
-    );
+  const novas = Array.from(arquivos || []).filter(
+    (file) => file && file.type.startsWith("image/"),
+  );
 
-    if (!novas.length) return;
+  if (!novas.length) return;
 
-    imagens.push(...novas);
+  imagens.push(...novas);
 
-    renderPreviews();
+  renderPreviews();
 
-    $("btnLer").disabled = imagens.length === 0;
+  $("btnLer").disabled = imagens.length === 0;
 
-    $("msgOcr").textContent =
-        `${imagens.length} imagem(ns) selecionada(s).`;
+  $("msgOcr").textContent = `${imagens.length} imagem(ns) selecionada(s).`;
 }
 
 function renderPreviews() {
-    $("previews").innerHTML = imagens.map((file, i) => `
+  $("previews").innerHTML = imagens
+    .map(
+      (file, i) => `
         <div class="preview-item">
             <img
                 src="${URL.createObjectURL(file)}"
@@ -84,69 +85,71 @@ function renderPreviews() {
 
             <small>${esc(file.name || "Imagem colada")}</small>
         </div>
-    `).join("");
+    `,
+    )
+    .join("");
 }
 
 // Remover uma imagem selecionada
-$("previews").addEventListener("click", e => {
-    const botao = e.target.closest("[data-remover-imagem]");
+$("previews").addEventListener("click", (e) => {
+  const botao = e.target.closest("[data-remover-imagem]");
 
-    if (!botao) return;
+  if (!botao) return;
 
-    imagens.splice(Number(botao.dataset.removerImagem), 1);
+  imagens.splice(Number(botao.dataset.removerImagem), 1);
 
-    renderPreviews();
+  renderPreviews();
 
-    $("btnLer").disabled = imagens.length === 0;
+  $("btnLer").disabled = imagens.length === 0;
 
-    $("msgOcr").textContent = imagens.length
-        ? `${imagens.length} imagem(ns) selecionada(s).`
-        : "Nenhuma imagem selecionada.";
+  $("msgOcr").textContent = imagens.length
+    ? `${imagens.length} imagem(ns) selecionada(s).`
+    : "Nenhuma imagem selecionada.";
 });
 
 // Selecionar arquivos pelo clique
-$("drop").addEventListener("click", e => {
-    if (e.target.closest(".rm-imagem")) return;
+$("drop").addEventListener("click", (e) => {
+  if (e.target.closest(".rm-imagem")) return;
 
-    $("arquivo").click();
+  $("arquivo").click();
 });
 
-$("arquivo").addEventListener("change", e => {
-    adicionarImagens(e.target.files);
+$("arquivo").addEventListener("change", (e) => {
+  adicionarImagens(e.target.files);
 
-    // Permite selecionar novamente o mesmo arquivo
-    e.target.value = "";
+  // Permite selecionar novamente o mesmo arquivo
+  e.target.value = "";
 });
 
 // Arrastar e soltar imagens
-$("drop").addEventListener("dragover", e => {
-    e.preventDefault();
-    $("drop").classList.add("over");
+$("drop").addEventListener("dragover", (e) => {
+  e.preventDefault();
+  $("drop").classList.add("over");
 });
 
 $("drop").addEventListener("dragleave", () => {
-    $("drop").classList.remove("over");
+  $("drop").classList.remove("over");
 });
 
-$("drop").addEventListener("drop", e => {
-    e.preventDefault();
+$("drop").addEventListener("drop", (e) => {
+  e.preventDefault();
 
-    $("drop").classList.remove("over");
+  $("drop").classList.remove("over");
 
-    adicionarImagens(e.dataTransfer.files);
+  adicionarImagens(e.dataTransfer.files);
 });
 
 // Colar imagens usando Ctrl + V
-document.addEventListener("paste", e => {
-    const arquivos = [];
+document.addEventListener("paste", (e) => {
+  const arquivos = [];
 
-    for (const item of e.clipboardData?.items || []) {
-        if (item.type.startsWith("image/")) {
-            arquivos.push(item.getAsFile());
-        }
+  for (const item of e.clipboardData?.items || []) {
+    if (item.type.startsWith("image/")) {
+      arquivos.push(item.getAsFile());
     }
+  }
 
-    adicionarImagens(arquivos);
+  adicionarImagens(arquivos);
 });
 
 // ------------------------------------------------------------
@@ -154,109 +157,96 @@ document.addEventListener("paste", e => {
 // ------------------------------------------------------------
 
 $("btnLer").addEventListener("click", async () => {
-    if (!imagens.length) return;
+  if (!imagens.length) return;
 
-    $("btnLer").disabled = true;
+  $("btnLer").disabled = true;
 
-    let todosItens = [];
-    let nf = "";
-    let forn = "";
-    let empresa = "";
+  let todosItens = [];
+  let nf = "";
+  let forn = "";
+  let empresa = "";
 
-    const erros = [];
+  const erros = [];
 
-    try {
-        for (let i = 0; i < imagens.length; i++) {
-            $("msgOcr").textContent =
-                `Lendo imagem ${i + 1} de ${imagens.length}...`;
+  try {
+    for (let i = 0; i < imagens.length; i++) {
+      $("msgOcr").textContent = `Lendo imagem ${i + 1} de ${imagens.length}...`;
 
-            const fd = new FormData();
-            const imagem = imagens[i];
+      const fd = new FormData();
+      const imagem = imagens[i];
 
-            fd.append(
-                "imagem",
-                imagem,
-                imagem.name || `print-${i + 1}.png`
-            );
+      fd.append("imagem", imagem, imagem.name || `print-${i + 1}.png`);
 
-            try {
-                const resposta = await fetch("/api/ocr", {
-                    method: "POST",
-                    body: fd
-                });
-
-                const dados = await resposta.json();
-
-                if (!resposta.ok) {
-                    throw new Error(
-                        dados.erro || "Erro ao ler a imagem."
-                    );
-                }
-
-                // Aproveita os dados identificados
-                if (!nf) nf = dados.nf || "";
-                if (!forn) forn = dados.fornecedor || "";
-
-                if (!empresa) {
-                    empresa = dados.empresa_sugerida || "";
-                }
-
-                // Acumula os itens de cada imagem
-                todosItens.push(...(dados.itens || []));
-
-            } catch (erro) {
-                erros.push(
-                    `Imagem ${i + 1}: ${erro.message}`
-                );
-            }
-        }
-
-        $("nf").value = nf;
-        $("forn").value = forn;
-
-        empresaSugerida = empresa;
-
-        // Remove itens rigorosamente duplicados
-        const vistos = new Set();
-
-        const itensUnicos = todosItens.filter(item => {
-            const chave = JSON.stringify([
-                item.codigo,
-                item.nome,
-                item.lancada,
-                item.conferida
-            ]);
-
-            if (vistos.has(chave)) return false;
-
-            vistos.add(chave);
-            return true;
+      try {
+        const resposta = await fetch("/api/ocr", {
+          method: "POST",
+          body: fd,
         });
 
-        itens = itensUnicos.map(novoItem);
+        const dados = await resposta.json();
 
-        let mensagem = itens.length
-            ? `${itens.length} item(ns) divergente(s) encontrado(s) em ${imagens.length} imagem(ns).`
-            : "Não encontrei itens. Confira as imagens ou adicione os itens manualmente.";
-
-        if (erros.length) {
-            mensagem += " " + erros.join(" | ");
+        if (!resposta.ok) {
+          throw new Error(dados.erro || "Erro ao ler a imagem.");
         }
 
-        $("msgOcr").textContent = mensagem;
+        // Aproveita os dados identificados
+        if (!nf) nf = dados.nf || "";
+        if (!forn) forn = dados.fornecedor || "";
 
-        $("secItens").hidden = false;
-        $("secTextos").hidden = true;
+        if (!empresa) {
+          empresa = dados.empresa_sugerida || "";
+        }
 
-        renderItens();
-
-    } catch (erro) {
-        $("msgOcr").textContent =
-            erro.message || "Erro ao processar as imagens.";
-
-    } finally {
-        $("btnLer").disabled = imagens.length === 0;
+        // Acumula os itens de cada imagem
+        todosItens.push(...(dados.itens || []));
+      } catch (erro) {
+        erros.push(`Imagem ${i + 1}: ${erro.message}`);
+      }
     }
+
+    $("nf").value = nf;
+    $("forn").value = forn;
+
+    empresaSugerida = empresa;
+
+    // Remove itens rigorosamente duplicados
+    const vistos = new Set();
+
+    const itensUnicos = todosItens.filter((item) => {
+      const chave = JSON.stringify([
+        item.codigo,
+        item.nome,
+        item.lancada,
+        item.conferida,
+      ]);
+
+      if (vistos.has(chave)) return false;
+
+      vistos.add(chave);
+      return true;
+    });
+
+    itens = itensUnicos.map(novoItem);
+
+    let mensagem = itens.length
+      ? `${itens.length} item(ns) divergente(s) encontrado(s) em ${imagens.length} imagem(ns).`
+      : "Não encontrei itens. Confira as imagens ou adicione os itens manualmente.";
+
+    if (erros.length) {
+      mensagem += " " + erros.join(" | ");
+    }
+
+    $("msgOcr").textContent = mensagem;
+
+    $("secItens").hidden = false;
+    $("secTextos").hidden = true;
+
+    renderItens();
+  } catch (erro) {
+    $("msgOcr").textContent = erro.message || "Erro ao processar as imagens.";
+  } finally {
+    $("btnLer").disabled = imagens.length === 0;
+  }
 });
 
 // ------------------------------------------------------------ 2. itens
@@ -554,45 +544,48 @@ async function salvar(forcar = false) {
 $("btnSalvar").addEventListener("click", () => salvar(false));
 
 $("btnNovo").addEventListener("click", () => {
-    imagens = [];
-    itens = [];
-    ultimo = null;
+  imagens = [];
+  itens = [];
+  ultimo = null;
 
-    $("previews").innerHTML = "";
-    $("arquivo").value = "";
+  $("previews").innerHTML = "";
+  $("arquivo").value = "";
 
-    $("btnLer").disabled = true;
-    $("msgOcr").textContent = "";
+  $("btnLer").disabled = true;
+  $("msgOcr").textContent = "";
 
-    $("nf").value = "";
-    $("forn").value = "";
+  $("nf").value = "";
+  $("forn").value = "";
 
-    empresaSugerida = "";
+  empresaSugerida = "";
 
-    $("secItens").hidden = true;
-    $("secTextos").hidden = true;
+  $("secItens").hidden = true;
+  $("secTextos").hidden = true;
 
-    window.scrollTo({
-        top: 0,
-        behavior: "smooth"
-    });
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth",
+  });
 });
 
 carregarMemoria();
-
 
 /* ===== CONSULTA E ACOMPANHAMENTO DE DIVERGÊNCIAS ===== */
 
 let divergenciaSelecionada = null;
 
 function escaparHTML(valor) {
-  return String(valor ?? "").replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;",
-  })[c]);
+  return String(valor ?? "").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[c],
+  );
 }
 
 async function carregarDivergencias() {
@@ -617,9 +610,7 @@ async function carregarDivergencias() {
   }
 
   try {
-    const resposta = await fetch(
-      `/api/divergencias?${parametros.toString()}`
-    );
+    const resposta = await fetch(`/api/divergencias?${parametros.toString()}`);
     const registros = await resposta.json();
 
     if (!resposta.ok) {
@@ -633,47 +624,128 @@ async function carregarDivergencias() {
       return;
     }
 
-    tabela.innerHTML = registros.map((registro) => {
-      const data = escaparHTML(
-        String(registro.data_registro || "").slice(0, 10)
-      );
-      const empresa = escaparHTML(registro.empresa);
-      const vendedor = escaparHTML(registro.vendedor);
-      const nf = escaparHTML(registro.nf);
-      const status = registro.status === "OK" ? "OK" : "PENDENTE";
-      const classe = status === "OK" ? "ok" : "pendente";
+    tabela.innerHTML = registros
+      .map((registro) => {
+        const data = escaparHTML(
+          String(registro.data_registro || "").slice(0, 10),
+        );
+        const empresa = escaparHTML(registro.empresa);
+        const vendedor = escaparHTML(registro.vendedor);
+        const nf = escaparHTML(registro.nf);
+        const status = registro.status === "OK" ? "OK" : "PENDENTE";
+        const classe = status === "OK" ? "ok" : "pendente";
 
-      return `
+        return `
         <tr>
           <td>${data}</td>
           <td>${empresa}</td>
           <td>${vendedor}</td>
           <td>${nf}</td>
           <td><span class="${classe}">${status}</span></td>
-          <td>
-            <button type="button" data-ver="${Number(registro.id)}">
-              Ver detalhes
-            </button>
-          </td>
+          <td class="acoes-registro">
+  <button type="button" data-ver="${Number(registro.id)}">
+    Ver detalhes
+  </button>
+
+  <button
+    type="button"
+    class="btn-excluir"
+    data-excluir="${Number(registro.id)}"
+  >
+    Excluir
+  </button>
+</td>
         </tr>
       `;
-    }).join("");
+      })
+      .join("");
 
-    // Os IDs vêm do banco e são convertidos para números.
+
+    
+    mensagem.textContent = `${registros.length} divergência(s) encontrada(s).`;
+
+    // Botão para visualizar os detalhes
     tabela.querySelectorAll("[data-ver]").forEach((botao) => {
       botao.addEventListener("click", () => {
         const id = Number(botao.dataset.ver);
         const registro = registros.find((r) => Number(r.id) === id);
-        if (registro) abrirDetalheDivergencia(registro);
+
+        if (registro) {
+          abrirDetalheDivergencia(registro);
+        }
       });
     });
 
-    mensagem.textContent = `${registros.length} divergência(s) encontrada(s).`;
+    // Botão para excluir um registro
+    tabela.querySelectorAll("[data-excluir]").forEach((botao) => {
+      botao.addEventListener("click", async () => {
+        const id = Number(botao.dataset.excluir);
+        const registro = registros.find((r) => Number(r.id) === id);
+
+        if (!registro) {
+          $("consultaMensagem").textContent =
+            "Não foi possível localizar o registro.";
+          return;
+        }
+
+        const confirmar = confirm(
+          "Deseja realmente excluir esta divergência?\n\n" +
+          `Empresa: ${registro.empresa}\n` +
+          `NF: ${registro.nf}\n\n` +
+          "Essa ação não poderá ser desfeita."
+        );
+
+        if (!confirmar) return;
+
+        botao.disabled = true;
+        $("consultaMensagem").textContent = "Excluindo registro...";
+
+        try {
+          const resposta = await fetch(
+            `/api/divergencias/${id}`,
+            { method: "DELETE" }
+          );
+
+          const resultado = await resposta.json();
+
+          if (!resposta.ok) {
+            throw new Error(
+              resultado.erro || "Não foi possível excluir."
+            );
+          }
+
+          // Fecha os detalhes se forem do registro excluído
+          if (
+            divergenciaSelecionada &&
+            Number(divergenciaSelecionada.id) === id
+          ) {
+            $("detalheDivergencia").hidden = true;
+            divergenciaSelecionada = null;
+          }
+
+          $("consultaMensagem").textContent =
+            "Divergência excluída com sucesso.";
+
+          // Atualiza a tabela sem o registro excluído
+          await carregarDivergencias();
+
+          $("consultaMensagem").textContent =
+            "Divergência excluída com sucesso.";
+        } catch (erro) {
+          $("consultaMensagem").textContent =
+            `Erro ao excluir: ${erro.message}`;
+
+          botao.disabled = false;
+        }
+      });
+    });
+
   } catch (erro) {
     tabela.innerHTML =
       '<tr><td colspan="6">Erro ao carregar os registros.</td></tr>';
     mensagem.textContent = erro.message;
   }
+
 }
 
 function abrirDetalheDivergencia(registro) {
@@ -684,7 +756,9 @@ function abrirDetalheDivergencia(registro) {
   const dados = registro.dados || {};
   const listaItens = Array.isArray(dados.itens) ? dados.itens : [];
 
-  const linhasItens = listaItens.map((item) => `
+  const linhasItens = listaItens
+    .map(
+      (item) => `
     <tr>
       <td>${escaparHTML(item.nome || item.descricao || "")}</td>
       <td>${escaparHTML(item.codigo || item.cod_correto || "")}</td>
@@ -693,7 +767,9 @@ function abrirDetalheDivergencia(registro) {
       <td>${escaparHTML(item.lancada ?? "")}</td>
       <td>${escaparHTML(item.motivo || "")}</td>
     </tr>
-  `).join("");
+  `,
+    )
+    .join("");
 
   conteudo.innerHTML = `
     <p><strong>Empresa:</strong> ${escaparHTML(registro.empresa)}</p>
@@ -744,8 +820,10 @@ async function atualizarStatusDivergencia(novoStatus) {
     return;
   }
 
-  if (novoStatus === "PENDENTE" &&
-      !confirm("Deseja reabrir esta divergência?")) {
+  if (
+    novoStatus === "PENDENTE" &&
+    !confirm("Deseja reabrir esta divergência?")
+  ) {
     return;
   }
 
@@ -761,7 +839,7 @@ async function atualizarStatusDivergencia(novoStatus) {
           status: novoStatus,
           solucao: novoStatus === "OK" ? solucao : "",
         }),
-      }
+      },
     );
 
     const resultado = await resposta.json();
@@ -775,13 +853,13 @@ async function atualizarStatusDivergencia(novoStatus) {
     await carregarDivergencias();
 
     const consultaAtualizada = await fetch(
-      `/api/divergencias?status=${novoStatus}`
+      `/api/divergencias?status=${novoStatus}`,
     );
     const registrosAtualizados = await consultaAtualizada.json();
 
     const atualizado = Array.isArray(registrosAtualizados)
       ? registrosAtualizados.find(
-          (r) => Number(r.id) === Number(divergenciaSelecionada.id)
+          (r) => Number(r.id) === Number(divergenciaSelecionada.id),
         )
       : null;
 
@@ -797,15 +875,9 @@ async function atualizarStatusDivergencia(novoStatus) {
   }
 }
 
-$("btnFiltrarDivergencias").addEventListener(
-  "click",
-  carregarDivergencias
-);
+$("btnFiltrarDivergencias").addEventListener("click", carregarDivergencias);
 
-$("btnAtualizarDivergencias").addEventListener(
-  "click",
-  carregarDivergencias
-);
+$("btnAtualizarDivergencias").addEventListener("click", carregarDivergencias);
 
 $("btnLimparFiltros").addEventListener("click", () => {
   $("filtroDataInicio").value = "";
@@ -828,8 +900,6 @@ $("btnFecharDetalhe").addEventListener("click", () => {
   $("detalheDivergencia").hidden = true;
   divergenciaSelecionada = null;
 });
-
-
 
 const modalConsulta = $("modalConsulta");
 const btnAbrirConsulta = $("btnAbrirConsulta");
@@ -857,8 +927,3 @@ modalConsulta.addEventListener("click", (event) => {
 modalConsulta.addEventListener("close", () => {
   btnAbrirConsulta.focus();
 });
-
-
-
-
-

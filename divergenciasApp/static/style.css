@@ -746,3 +746,32 @@ dialog h2 {
 .rm-imagem:hover{
   background-color: rgba(198, 40, 40, 0.5);
 }
+
+
+.acoes-registro {
+  white-space: nowrap;
+  min-width: 190px;
+}
+
+.acoes-registro button {
+  margin: 3px;
+}
+
+.btn-excluir {
+  color: #b42318;
+  background: #fff;
+  border: 1px solid #f0b4ae;
+  border-radius: 5px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.btn-excluir:hover {
+  background: #fff0ee;
+  border-color: #b42318;
+}
+
+.btn-excluir:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}

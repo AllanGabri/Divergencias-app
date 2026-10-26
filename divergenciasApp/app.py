@@ -528,6 +528,32 @@ def api_listar_divergencias():
         return jsonify(erro=f"Erro ao consultar divergências: {e}"), 500
 
 
+@app.delete("/api/divergencias/<int:id_divergencia>")
+def api_excluir_divergencia(id_divergencia):
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.execute(
+                "DELETE FROM divergencias WHERE id = ?",
+                (id_divergencia,)
+            )
+
+            if cursor.rowcount == 0:
+                return jsonify(
+                    erro="Divergência não encontrada."
+                ), 404
+
+        return jsonify(
+            sucesso=True,
+            mensagem="Divergência excluída com sucesso."
+        )
+
+    except Exception as e:
+        app.logger.exception("Erro ao excluir divergência")
+        return jsonify(
+            erro=f"Erro ao excluir divergência: {e}"
+        ), 500
+
+
 @app.post("/api/divergencias/<int:id_divergencia>/status")
 def api_atualizar_status_divergencia(id_divergencia):
     d = request.get_json(silent=True) or {}
