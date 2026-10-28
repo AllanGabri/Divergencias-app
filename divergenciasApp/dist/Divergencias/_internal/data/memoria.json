@@ -1,11 +1,14 @@
 {
   "empresas": [
-    "CBB"
+    "CBB",
+    "PLATINA"
   ],
   "vendedores": [
-    "JEFERSON"
+    "JEFERSON",
+    "VANDRE"
   ],
   "fornecedores": {
+    "1885": "PLATINA",
     "2512": "CBB"
   }
 }

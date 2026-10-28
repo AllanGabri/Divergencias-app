@@ -19,7 +19,7 @@ const MOTIVOS = [
   ["sobra", "Sobra"],
 ];
 
-let imagem = null; // File/Blob do print
+let imagens = []; // File/Blob do print
 let itens = []; // itens divergentes
 let fornecedor = ""; // código do fornecedor lido do print
 let empresaSugerida = "";
@@ -42,64 +42,210 @@ async function carregarMemoria() {
 }
 
 // ------------------------------------------------------------ 1. print
-function definirImagem(file) {
-  if (!file || !file.type.startsWith("image/")) return;
-  imagem = file;
-  const prev = $("preview");
-  prev.src = URL.createObjectURL(file);
-  prev.hidden = false;
-  $("btnLer").disabled = false;
-  $("msgOcr").textContent = "";
+// ------------------------------------------------------------
+// Seleção de múltiplas imagens
+// ------------------------------------------------------------
+
+function adicionarImagens(arquivos) {
+  const novas = Array.from(arquivos || []).filter(
+    (file) => file && file.type.startsWith("image/"),
+  );
+
+  if (!novas.length) return;
+
+  imagens.push(...novas);
+
+  renderPreviews();
+
+  $("btnLer").disabled = imagens.length === 0;
+
+  $("msgOcr").textContent = `${imagens.length} imagem(ns) selecionada(s).`;
 }
 
-$("drop").addEventListener("click", () => $("arquivo").click());
-$("arquivo").addEventListener("change", (e) =>
-  definirImagem(e.target.files[0]),
-);
+function renderPreviews() {
+  $("previews").innerHTML = imagens
+    .map(
+      (file, i) => `
+        <div class="preview-item">
+            <img
+                src="${URL.createObjectURL(file)}"
+                alt="Prévia da imagem ${i + 1}"
+            >
+
+            <div class="preview-info">
+                <span>Imagem ${i + 1}</span>
+
+                <button
+                    type="button"
+                    class="rm-imagem"
+                    data-remover-imagem="${i}"
+                    aria-label="Remover imagem ${i + 1}"
+                >×</button>
+            </div>
+
+            <small>${esc(file.name || "Imagem colada")}</small>
+        </div>
+    `,
+    )
+    .join("");
+}
+
+// Remover uma imagem selecionada
+$("previews").addEventListener("click", (e) => {
+  const botao = e.target.closest("[data-remover-imagem]");
+
+  if (!botao) return;
+
+  imagens.splice(Number(botao.dataset.removerImagem), 1);
+
+  renderPreviews();
+
+  $("btnLer").disabled = imagens.length === 0;
+
+  $("msgOcr").textContent = imagens.length
+    ? `${imagens.length} imagem(ns) selecionada(s).`
+    : "Nenhuma imagem selecionada.";
+});
+
+// Selecionar arquivos pelo clique
+$("drop").addEventListener("click", (e) => {
+  if (e.target.closest(".rm-imagem")) return;
+
+  $("arquivo").click();
+});
+
+$("arquivo").addEventListener("change", (e) => {
+  adicionarImagens(e.target.files);
+
+  // Permite selecionar novamente o mesmo arquivo
+  e.target.value = "";
+});
+
+// Arrastar e soltar imagens
 $("drop").addEventListener("dragover", (e) => {
   e.preventDefault();
   $("drop").classList.add("over");
 });
-$("drop").addEventListener("dragleave", () =>
-  $("drop").classList.remove("over"),
-);
-$("drop").addEventListener("drop", (e) => {
-  e.preventDefault();
+
+$("drop").addEventListener("dragleave", () => {
   $("drop").classList.remove("over");
-  definirImagem(e.dataTransfer.files[0]);
-});
-document.addEventListener("paste", (e) => {
-  for (const it of e.clipboardData?.items || []) {
-    if (it.type.startsWith("image/")) {
-      definirImagem(it.getAsFile());
-      break;
-    }
-  }
 });
 
+$("drop").addEventListener("drop", (e) => {
+  e.preventDefault();
+
+  $("drop").classList.remove("over");
+
+  adicionarImagens(e.dataTransfer.files);
+});
+
+// Colar imagens usando Ctrl + V
+document.addEventListener("paste", (e) => {
+  const arquivos = [];
+
+  for (const item of e.clipboardData?.items || []) {
+    if (item.type.startsWith("image/")) {
+      arquivos.push(item.getAsFile());
+    }
+  }
+
+  adicionarImagens(arquivos);
+});
+
+// ------------------------------------------------------------
+// Ler todas as imagens
+// ------------------------------------------------------------
+
 $("btnLer").addEventListener("click", async () => {
+  if (!imagens.length) return;
+
   $("btnLer").disabled = true;
-  $("msgOcr").textContent = "Lendo o print…";
-  const fd = new FormData();
-  fd.append("imagem", imagem, imagem.name || "print.png");
+
+  let todosItens = [];
+  let nf = "";
+  let forn = "";
+  let empresa = "";
+
+  const erros = [];
+
   try {
-    const r = await fetch("/api/ocr", { method: "POST", body: fd });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.erro || "Erro ao ler o print.");
-    $("nf").value = d.nf;
-    $("forn").value = d.fornecedor;
-    empresaSugerida = d.empresa_sugerida || "";
-    itens = d.itens.map(novoItem);
-    $("msgOcr").textContent = itens.length
-      ? `${itens.length} item(ns) divergente(s) encontrado(s).`
-      : "Não encontrei itens no print. Confira a imagem ou adicione os itens manualmente.";
+    for (let i = 0; i < imagens.length; i++) {
+      $("msgOcr").textContent = `Lendo imagem ${i + 1} de ${imagens.length}...`;
+
+      const fd = new FormData();
+      const imagem = imagens[i];
+
+      fd.append("imagem", imagem, imagem.name || `print-${i + 1}.png`);
+
+      try {
+        const resposta = await fetch("/api/ocr", {
+          method: "POST",
+          body: fd,
+        });
+
+        const dados = await resposta.json();
+
+        if (!resposta.ok) {
+          throw new Error(dados.erro || "Erro ao ler a imagem.");
+        }
+
+        // Aproveita os dados identificados
+        if (!nf) nf = dados.nf || "";
+        if (!forn) forn = dados.fornecedor || "";
+
+        if (!empresa) {
+          empresa = dados.empresa_sugerida || "";
+        }
+
+        // Acumula os itens de cada imagem
+        todosItens.push(...(dados.itens || []));
+      } catch (erro) {
+        erros.push(`Imagem ${i + 1}: ${erro.message}`);
+      }
+    }
+
+    $("nf").value = nf;
+    $("forn").value = forn;
+
+    empresaSugerida = empresa;
+
+    // Remove itens rigorosamente duplicados
+    const vistos = new Set();
+
+    const itensUnicos = todosItens.filter((item) => {
+      const chave = JSON.stringify([
+        item.codigo,
+        item.nome,
+        item.lancada,
+        item.conferida,
+      ]);
+
+      if (vistos.has(chave)) return false;
+
+      vistos.add(chave);
+      return true;
+    });
+
+    itens = itensUnicos.map(novoItem);
+
+    let mensagem = itens.length
+      ? `${itens.length} item(ns) divergente(s) encontrado(s) em ${imagens.length} imagem(ns).`
+      : "Não encontrei itens. Confira as imagens ou adicione os itens manualmente.";
+
+    if (erros.length) {
+      mensagem += " " + erros.join(" | ");
+    }
+
+    $("msgOcr").textContent = mensagem;
+
     $("secItens").hidden = false;
     $("secTextos").hidden = true;
+
     renderItens();
-  } catch (err) {
-    $("msgOcr").textContent = err.message;
+  } catch (erro) {
+    $("msgOcr").textContent = erro.message || "Erro ao processar as imagens.";
   } finally {
-    $("btnLer").disabled = false;
+    $("btnLer").disabled = imagens.length === 0;
   }
 });
 
@@ -398,17 +544,386 @@ async function salvar(forcar = false) {
 $("btnSalvar").addEventListener("click", () => salvar(false));
 
 $("btnNovo").addEventListener("click", () => {
-  imagem = null;
+  imagens = [];
   itens = [];
   ultimo = null;
-  $("preview").hidden = true;
-  $("preview").src = "";
+
+  $("previews").innerHTML = "";
   $("arquivo").value = "";
+
   $("btnLer").disabled = true;
   $("msgOcr").textContent = "";
+
+  $("nf").value = "";
+  $("forn").value = "";
+
+  empresaSugerida = "";
+
   $("secItens").hidden = true;
   $("secTextos").hidden = true;
-  window.scrollTo({ top: 0, behavior: "smooth" });
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth",
+  });
 });
 
 carregarMemoria();
+
+/* ===== CONSULTA E ACOMPANHAMENTO DE DIVERGÊNCIAS ===== */
+
+let divergenciaSelecionada = null;
+
+function escaparHTML(valor) {
+  return String(valor ?? "").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[c],
+  );
+}
+
+async function carregarDivergencias() {
+  const mensagem = $("consultaMensagem");
+  const tabela = $("tabelaDivergencias");
+
+  mensagem.textContent = "Carregando divergências...";
+  tabela.innerHTML = '<tr><td colspan="6">Carregando...</td></tr>';
+
+  const parametros = new URLSearchParams();
+
+  const filtros = {
+    data_inicio: $("filtroDataInicio").value,
+    data_fim: $("filtroDataFim").value,
+    empresa: $("filtroEmpresa").value.trim(),
+    vendedor: $("filtroVendedor").value.trim(),
+    status: $("filtroStatus").value,
+  };
+
+  for (const [chave, valor] of Object.entries(filtros)) {
+    if (valor) parametros.set(chave, valor);
+  }
+
+  try {
+    const resposta = await fetch(`/api/divergencias?${parametros.toString()}`);
+    const registros = await resposta.json();
+
+    if (!resposta.ok) {
+      throw new Error(registros.erro || "Não foi possível consultar.");
+    }
+
+    if (!Array.isArray(registros) || registros.length === 0) {
+      tabela.innerHTML =
+        '<tr><td colspan="6">Nenhuma divergência encontrada.</td></tr>';
+      mensagem.textContent = "Nenhum registro encontrado.";
+      return;
+    }
+
+    tabela.innerHTML = registros
+      .map((registro) => {
+        const data = escaparHTML(
+          String(registro.data_registro || "").slice(0, 10),
+        );
+        const empresa = escaparHTML(registro.empresa);
+        const vendedor = escaparHTML(registro.vendedor);
+        const nf = escaparHTML(registro.nf);
+        const status = registro.status === "OK" ? "OK" : "PENDENTE";
+        const classe = status === "OK" ? "ok" : "pendente";
+
+        return `
+        <tr>
+          <td>${data}</td>
+          <td>${empresa}</td>
+          <td>${vendedor}</td>
+          <td>${nf}</td>
+          <td><span class="${classe}">${status}</span></td>
+          <td class="acoes-registro">
+  <button type="button" data-ver="${Number(registro.id)}">
+    Ver detalhes
+  </button>
+
+  <button
+    type="button"
+    class="btn-excluir"
+    data-excluir="${Number(registro.id)}"
+  >
+    Excluir
+  </button>
+</td>
+        </tr>
+      `;
+      })
+      .join("");
+
+
+    
+    mensagem.textContent = `${registros.length} divergência(s) encontrada(s).`;
+
+    // Botão para visualizar os detalhes
+    tabela.querySelectorAll("[data-ver]").forEach((botao) => {
+      botao.addEventListener("click", () => {
+        const id = Number(botao.dataset.ver);
+        const registro = registros.find((r) => Number(r.id) === id);
+
+        if (registro) {
+          abrirDetalheDivergencia(registro);
+        }
+      });
+    });
+
+    // Botão para excluir um registro
+    tabela.querySelectorAll("[data-excluir]").forEach((botao) => {
+      botao.addEventListener("click", async () => {
+        const id = Number(botao.dataset.excluir);
+        const registro = registros.find((r) => Number(r.id) === id);
+
+        if (!registro) {
+          $("consultaMensagem").textContent =
+            "Não foi possível localizar o registro.";
+          return;
+        }
+
+        const confirmar = confirm(
+          "Deseja realmente excluir esta divergência?\n\n" +
+          `Empresa: ${registro.empresa}\n` +
+          `NF: ${registro.nf}\n\n` +
+          "Essa ação não poderá ser desfeita."
+        );
+
+        if (!confirmar) return;
+
+        botao.disabled = true;
+        $("consultaMensagem").textContent = "Excluindo registro...";
+
+        try {
+          const resposta = await fetch(
+            `/api/divergencias/${id}`,
+            { method: "DELETE" }
+          );
+
+          const resultado = await resposta.json();
+
+          if (!resposta.ok) {
+            throw new Error(
+              resultado.erro || "Não foi possível excluir."
+            );
+          }
+
+          // Fecha os detalhes se forem do registro excluído
+          if (
+            divergenciaSelecionada &&
+            Number(divergenciaSelecionada.id) === id
+          ) {
+            $("detalheDivergencia").hidden = true;
+            divergenciaSelecionada = null;
+          }
+
+          $("consultaMensagem").textContent =
+            "Divergência excluída com sucesso.";
+
+          // Atualiza a tabela sem o registro excluído
+          await carregarDivergencias();
+
+          $("consultaMensagem").textContent =
+            "Divergência excluída com sucesso.";
+        } catch (erro) {
+          $("consultaMensagem").textContent =
+            `Erro ao excluir: ${erro.message}`;
+
+          botao.disabled = false;
+        }
+      });
+    });
+
+  } catch (erro) {
+    tabela.innerHTML =
+      '<tr><td colspan="6">Erro ao carregar os registros.</td></tr>';
+    mensagem.textContent = erro.message;
+  }
+
+}
+
+function abrirDetalheDivergencia(registro) {
+  divergenciaSelecionada = registro;
+
+  const painel = $("detalheDivergencia");
+  const conteudo = $("detalheConteudo");
+  const dados = registro.dados || {};
+  const listaItens = Array.isArray(dados.itens) ? dados.itens : [];
+
+  const linhasItens = listaItens
+    .map(
+      (item) => `
+    <tr>
+      <td>${escaparHTML(item.nome || item.descricao || "")}</td>
+      <td>${escaparHTML(item.codigo || item.cod_correto || "")}</td>
+      <td>${escaparHTML(item.qtd ?? "")}</td>
+      <td>${escaparHTML(item.conferida ?? "")}</td>
+      <td>${escaparHTML(item.lancada ?? "")}</td>
+      <td>${escaparHTML(item.motivo || "")}</td>
+    </tr>
+  `,
+    )
+    .join("");
+
+  conteudo.innerHTML = `
+    <p><strong>Empresa:</strong> ${escaparHTML(registro.empresa)}</p>
+    <p><strong>Vendedor:</strong> ${escaparHTML(registro.vendedor)}</p>
+    <p><strong>Nota fiscal:</strong> ${escaparHTML(registro.nf)}</p>
+    <p><strong>Fornecedor:</strong> ${escaparHTML(registro.fornecedor)}</p>
+    <p><strong>Status:</strong> ${escaparHTML(registro.status)}</p>
+    <p><strong>Solução registrada:</strong> ${escaparHTML(registro.solucao || "Nenhuma")}</p>
+
+    <h4>Itens da conferência</h4>
+    <div style="overflow-x:auto">
+      <table style="width:100%; border-collapse:collapse">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Código</th>
+            <th>Quantidade</th>
+            <th>Conferida</th>
+            <th>Lançada</th>
+            <th>Motivo</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${linhasItens || '<tr><td colspan="6">Nenhum item disponível.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  $("solucaoDivergencia").value = registro.solucao || "";
+  $("detalheMensagem").textContent = "";
+  $("btnReabrirDivergencia").disabled = registro.status !== "OK";
+  $("btnResolverDivergencia").disabled = registro.status === "OK";
+
+  painel.hidden = false;
+  painel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function atualizarStatusDivergencia(novoStatus) {
+  if (!divergenciaSelecionada) return;
+
+  const solucao = $("solucaoDivergencia").value.trim();
+  const mensagem = $("detalheMensagem");
+
+  if (novoStatus === "OK" && !solucao) {
+    mensagem.textContent =
+      "Descreva como a divergência foi resolvida antes de continuar.";
+    return;
+  }
+
+  if (
+    novoStatus === "PENDENTE" &&
+    !confirm("Deseja reabrir esta divergência?")
+  ) {
+    return;
+  }
+
+  mensagem.textContent = "Salvando alterações...";
+
+  try {
+    const resposta = await fetch(
+      `/api/divergencias/${Number(divergenciaSelecionada.id)}/status`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: novoStatus,
+          solucao: novoStatus === "OK" ? solucao : "",
+        }),
+      },
+    );
+
+    const resultado = await resposta.json();
+
+    if (!resposta.ok) {
+      throw new Error(resultado.erro || "Não foi possível atualizar.");
+    }
+
+    mensagem.textContent = "Alterações salvas no banco de dados.";
+
+    await carregarDivergencias();
+
+    const consultaAtualizada = await fetch(
+      `/api/divergencias?status=${novoStatus}`,
+    );
+    const registrosAtualizados = await consultaAtualizada.json();
+
+    const atualizado = Array.isArray(registrosAtualizados)
+      ? registrosAtualizados.find(
+          (r) => Number(r.id) === Number(divergenciaSelecionada.id),
+        )
+      : null;
+
+    if (atualizado) {
+      abrirDetalheDivergencia(atualizado);
+      $("detalheMensagem").textContent = "Alterações salvas com sucesso.";
+    } else {
+      $("detalheDivergencia").hidden = true;
+      divergenciaSelecionada = null;
+    }
+  } catch (erro) {
+    mensagem.textContent = `Erro: ${erro.message}`;
+  }
+}
+
+$("btnFiltrarDivergencias").addEventListener("click", carregarDivergencias);
+
+$("btnAtualizarDivergencias").addEventListener("click", carregarDivergencias);
+
+$("btnLimparFiltros").addEventListener("click", () => {
+  $("filtroDataInicio").value = "";
+  $("filtroDataFim").value = "";
+  $("filtroEmpresa").value = "";
+  $("filtroVendedor").value = "";
+  $("filtroStatus").value = "";
+  carregarDivergencias();
+});
+
+$("btnResolverDivergencia").addEventListener("click", () => {
+  atualizarStatusDivergencia("OK");
+});
+
+$("btnReabrirDivergencia").addEventListener("click", () => {
+  atualizarStatusDivergencia("PENDENTE");
+});
+
+$("btnFecharDetalhe").addEventListener("click", () => {
+  $("detalheDivergencia").hidden = true;
+  divergenciaSelecionada = null;
+});
+
+const modalConsulta = $("modalConsulta");
+const btnAbrirConsulta = $("btnAbrirConsulta");
+const btnFecharConsulta = $("btnFecharConsulta");
+
+btnAbrirConsulta.addEventListener("click", async () => {
+  if (!modalConsulta.open) {
+    modalConsulta.showModal();
+    await carregarDivergencias();
+  }
+});
+
+btnFecharConsulta.addEventListener("click", () => {
+  modalConsulta.close();
+});
+
+// Fecha ao clicar fora da janela
+modalConsulta.addEventListener("click", (event) => {
+  if (event.target === modalConsulta) {
+    modalConsulta.close();
+  }
+});
+
+// Fecha com a tecla Esc
+modalConsulta.addEventListener("close", () => {
+  btnAbrirConsulta.focus();
+});
