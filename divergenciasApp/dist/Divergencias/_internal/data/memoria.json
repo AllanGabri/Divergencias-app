@@ -1,11 +1,22 @@
 {
   "empresas": [
-    "CBB"
+    "CAPRICHOSA",
+    "CBB",
+    "DALLA",
+    "MAESTRAL",
+    "PLATINA"
   ],
   "vendedores": [
-    "JEFERSON"
+    "DIEGO",
+    "JEFERSON",
+    "ROBSON",
+    "VANDRE"
   ],
   "fornecedores": {
-    "2512": "CBB"
+    "1885": "PLATINA",
+    "2448": "DALLA",
+    "1285": "CAPRICHOSA",
+    "2512": "CBB",
+    "1185": "MAESTRAL"
   }
 }
