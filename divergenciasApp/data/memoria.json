@@ -3,9 +3,11 @@
     "CAPRICHOSA",
     "CBB",
     "DALLA",
+    "MAESTRAL",
     "PLATINA"
   ],
   "vendedores": [
+    "DIEGO",
     "JEFERSON",
     "ROBSON",
     "VANDRE"
@@ -14,6 +16,7 @@
     "1885": "PLATINA",
     "2448": "DALLA",
     "1285": "CAPRICHOSA",
-    "2512": "CBB"
+    "2512": "CBB",
+    "1185": "MAESTRAL"
   }
 }

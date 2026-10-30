@@ -322,17 +322,41 @@ def ler_memoria():
     return base
 
 
+
 def gravar_memoria(empresa, vendedor, fornecedor):
     mem = ler_memoria()
+
+    # Garante que as estruturas existam
+    mem.setdefault("empresas", [])
+    mem.setdefault("vendedores", [])
+    mem.setdefault("fornecedores", {})
+
+    empresa = str(empresa or "").strip().upper()
+    vendedor = str(vendedor or "").strip().upper()
+    fornecedor = str(fornecedor or "").strip()
+
     if empresa and empresa not in mem["empresas"]:
         mem["empresas"].append(empresa)
+
     if vendedor and vendedor not in mem["vendedores"]:
         mem["vendedores"].append(vendedor)
+
     if fornecedor and empresa:
         mem["fornecedores"][fornecedor] = empresa
+
     mem["empresas"].sort()
     mem["vendedores"].sort()
-    MEMORIA_PATH.write_text(json.dumps(mem, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # Gravação segura do JSON
+    temporario = MEMORIA_PATH.with_suffix(".tmp")
+
+    temporario.write_text(
+        json.dumps(mem, ensure_ascii=False, indent=2),
+        encoding="utf-8"
+    )
+
+    temporario.replace(MEMORIA_PATH)
+
 
 
 @app.get("/api/memoria")
@@ -492,8 +516,18 @@ def api_salvar():
                 )
                 id_divergencia = cursor.lastrowid
 
-            gravar_memoria(empresa, vendedor, fornecedor)
+                       # Atualiza a memória após gravar no banco
+            gravar_memoria(
+                empresa,
+                vendedor,
+                fornecedor
+            )
 
+            app.logger.info(
+                "Divergência %s gravada no DB e memória atualizada.",
+                id_divergencia
+            )
+            
         except Exception as e:
             app.logger.exception("Erro ao salvar divergência no SQLite")
             return jsonify(
@@ -563,6 +597,37 @@ def api_listar_divergencias():
     except Exception as e:
         app.logger.exception("Erro ao consultar divergências")
         return jsonify(erro=f"Erro ao consultar divergências: {e}"), 500
+
+
+@app.delete("/api/divergencias/<int:id_divergencia>")
+def api_excluir_divergencia(id_divergencia):
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.execute(
+                """
+                DELETE FROM divergencias
+                WHERE id = ?
+                """,
+                (id_divergencia,)
+            )
+
+            if cursor.rowcount == 0:
+                return jsonify(
+                    erro="Divergência não encontrada."
+                ), 404
+
+        return jsonify(
+            sucesso=True,
+            mensagem="Divergência excluída com sucesso.",
+            id=id_divergencia
+        )
+
+    except Exception as e:
+        app.logger.exception("Erro ao excluir divergência")
+
+        return jsonify(
+            erro=f"Erro ao excluir divergência: {e}"
+        ), 500
 
 
 @app.post("/api/divergencias/<int:id_divergencia>/status")
