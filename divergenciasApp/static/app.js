@@ -421,7 +421,7 @@ $("dlg").addEventListener("close", () => {
 
 function saudacao() {
   const h = new Date().getHours(); // hora do computador
-  if (h < 12) return "Bom dia";
+  if (h < 13) return "Bom dia";
   if (h < 18) return "Boa tarde";
   return "Boa noite";
 }
@@ -433,13 +433,13 @@ function linhaMotivo(it) {
     um = q === 1;
   switch (it.motivo) {
     case "sobra":
-      return um ? "veio 1un a mais" : `vieram ${q} a mais`;
+      return um ? "Veio 1un a mais" : `Vieram ${q} a mais`;
     case "falta":
-      return um ? "faltou 1un" : `faltaram ${q}un`;
+      return um ? "Faltou 1un" : `Faltaram ${q}un`;
     case "danificado":
-      return um ? "veio 1un danificado" : `vieram ${q}un danificados`;
+      return um ? "Veio 1un danificado" : `Vieram ${q}un danificados`;
     case "sem_validade":
-      return um ? "veio 1un sem validade" : `vieram ${q}un sem validade`;
+      return um ? "Veio 1un sem validade" : `Vieram ${q}un sem validade`;
     case "validade_prox":
       return `${q}un c/validade ${it.validade || "NÃO INFORMADA"}`;
 
@@ -460,7 +460,7 @@ function gerarTextos() {
   $("boxDiv").hidden = !normais.length;
   if (normais.length) {
     $("txtDiv").value =
-      `${s}, tudo bem? teve divergencia na nf ${nf} da ${emp}\n\n` +
+      `${s}, tudo bem? Teve divergencia na NF ${nf} da ${emp}\n\n` +
       normais
         .map((i) => `${nomeMin(i.nome)} cod ${i.codigo}\n${linhaMotivo(i)}`)
         .join("\n\n");
@@ -469,11 +469,11 @@ function gerarTextos() {
   $("boxCarta").hidden = !cartas.length;
   if (cartas.length) {
     $("txtCarta").value =
-      `${s}, tudo bem?\n\npreciso que emita uma carta de correçao para a nf ${nf} da ${emp} para os seguintes itens:\n\n` +
+      `${s}, Tudo bem?\n\npreciso que emita uma carta de correçao para a nf ${nf} da ${emp} para os seguintes itens:\n\n` +
       cartas
         .map(
           (i) =>
-            `${nomeMin(i.nome)} veio faturado com o cod ${i.cod_errado.trim()} preciso que corrija para o cod ${i.cod_correto.trim()}`,
+            `${nomeMin(i.nome)} Veio faturado com o cod ${i.cod_errado.trim()}, preciso que corrija para o cod ${i.cod_correto.trim()}`,
         )
         .join("\n\n");
   }

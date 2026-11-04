@@ -1,13 +1,19 @@
 {
   "empresas": [
+    "BEIRA ALTA",
     "CAPRICHOSA",
     "CBB",
     "DALLA",
     "MAESTRAL",
-    "PLATINA"
+    "MODERNINHAS",
+    "PLATINA",
+    "RAIMAR"
   ],
   "vendedores": [
     "DIEGO",
+    "DIONE",
+    "HIKO",
+    "HILTON",
     "JEFERSON",
     "ROBSON",
     "VANDRE"
@@ -17,6 +23,9 @@
     "2448": "DALLA",
     "1285": "CAPRICHOSA",
     "2512": "CBB",
-    "1185": "MAESTRAL"
+    "1185": "MAESTRAL",
+    "2191": "MODERNINHAS",
+    "1142": "RAIMAR",
+    "218": "BEIRA ALTA"
   }
 }
