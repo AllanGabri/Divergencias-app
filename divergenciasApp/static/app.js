@@ -6,7 +6,7 @@ const esc = (s) =>
     /[&<>"']/g,
     (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        c
+      c
       ],
   );
 
@@ -24,6 +24,7 @@ let itens = []; // itens divergentes
 let fornecedor = ""; // código do fornecedor lido do print
 let empresaSugerida = "";
 let ultimo = null; // dados da última geração (para salvar)
+let editandoId = null;
 
 // ------------------------------------------------------------ memória / topo
 async function carregarMemoria() {
@@ -292,17 +293,16 @@ function renderItens() {
       </div>
       <div class="motivos">
         ${MOTIVOS.map(
-          ([v, t]) => `
+        ([v, t]) => `
           <label><input type="radio" name="m${n}" value="${v}" ${it.motivo === v ? "checked" : ""}> ${t}</label>`,
-        ).join("")}
+      ).join("")}
       </div>
       
 
 
 <div class="corrige">
-  ${
-    it.motivo === "validade_prox"
-      ? `
+  ${it.motivo === "validade_prox"
+          ? `
     <label class="campo-validade">
       Validade do produto
       <input
@@ -313,12 +313,11 @@ function renderItens() {
       >
     </label>
   `
-      : ""
-  }
+          : ""
+        }
 
-  ${
-    it.motivo === "codigo_incorreto"
-      ? `
+  ${it.motivo === "codigo_incorreto"
+          ? `
     <label>
       Cód. faturado (errado)
       <input data-f="cod_errado" value="${esc(it.cod_errado)}">
@@ -328,8 +327,8 @@ function renderItens() {
       <input data-f="cod_correto" value="${esc(it.cod_correto)}">
     </label>
   `
-      : ""
-  }
+          : ""
+        }
 </div>
 
 
@@ -408,8 +407,11 @@ $("btnOk").addEventListener("click", () => {
     return;
   }
 
-  $("empresa").value = empresaSugerida;
-  $("data").value = new Date().toLocaleDateString("sv-SE"); // aaaa-mm-dd no fuso local
+  if (!editandoId) {
+    $("empresa").value = empresaSugerida;
+    $("data").value = new Date().toLocaleDateString("sv-SE");
+  }
+
   $("dlg").showModal();
   $("empresa").focus();
 });
@@ -451,7 +453,7 @@ function linhaMotivo(it) {
 function gerarTextos() {
   const empresa = $("empresa").value.trim();
   const nf = $("nf").value.trim();
-  const emp = empresa.toLowerCase();
+  const emp = empresa.toUpperCase();
   const s = saudacao();
 
   const normais = itens.filter((i) => i.motivo !== "codigo_incorreto");
@@ -469,7 +471,7 @@ function gerarTextos() {
   $("boxCarta").hidden = !cartas.length;
   if (cartas.length) {
     $("txtCarta").value =
-      `${s}, Tudo bem?\n\npreciso que emita uma carta de correçao para a nf ${nf} da ${emp} para os seguintes itens:\n\n` +
+      `${s}, Tudo bem?\n\npreciso que emita uma carta de correçao para a NF ${nf} da ${emp} para os seguintes itens:\n\n` +
       cartas
         .map(
           (i) =>
@@ -514,10 +516,19 @@ async function salvar(forcar = false) {
   msg.textContent = "Salvando…";
   // se o usuário editou os textos, nada disso vai para a planilha; só os dados.
   try {
-    const r = await fetch("/api/salvar", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...ultimo, forcar }),
+    const url = editandoId
+      ? `/api/divergencias/${editandoId}/editar`
+      : "/api/salvar";
+
+    const r = await fetch(url, {
+      method: editandoId ? "PUT" : "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        ...ultimo,
+        forcar
+      })
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.erro || "Erro ao salvar.");
@@ -532,8 +543,17 @@ async function salvar(forcar = false) {
       return;
     }
     msg.className = "ok";
-    msg.textContent = `Salvo na aba ${d.aba}, linha ${d.linha}.`;
+
+    if (editandoId) {
+      msg.textContent = "Divergência editada com sucesso!";
+      editandoId = null;
+      $("data").readOnly = false;
+    } else {
+      msg.textContent = `Salvo na aba ${d.aba}, linha ${d.linha}.`;
+    }
+
     $("btnSalvar").disabled = true;
+
     carregarMemoria();
   } catch (err) {
     msg.className = "erro";
@@ -544,6 +564,8 @@ async function salvar(forcar = false) {
 $("btnSalvar").addEventListener("click", () => salvar(false));
 
 $("btnNovo").addEventListener("click", () => {
+  editandoId = null;
+  $("data").readOnly = false;
   imagens = [];
   itens = [];
   ultimo = null;
@@ -661,7 +683,7 @@ async function carregarDivergencias() {
       .join("");
 
 
-    
+
     mensagem.textContent = `${registros.length} divergência(s) encontrada(s).`;
 
     // Botão para visualizar os detalhes
@@ -808,6 +830,85 @@ function abrirDetalheDivergencia(registro) {
   painel.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+
+function iniciarEdicaoDivergencia() {
+  if (!divergenciaSelecionada) return;
+
+  const registro = divergenciaSelecionada;
+  const dados = registro.dados || {};
+
+  if (!Array.isArray(dados.itens) || !dados.itens.length) {
+    alert("Não existem itens disponíveis para editar.");
+    return;
+  }
+
+  editandoId = Number(registro.id);
+
+  // Recupera os dados da divergência.
+  $("nf").value = dados.nf || registro.nf || "";
+  $("forn").value = dados.fornecedor || registro.fornecedor || "";
+
+  $("empresa").value = dados.empresa || registro.empresa || "";
+  $("vendedor").value = dados.vendedor || registro.vendedor || "";
+
+  $("data").value = (
+    dados.data || registro.data_registro || ""
+  ).slice(0, 10);
+
+  $("data").readOnly = true;
+
+  empresaSugerida = $("empresa").value;
+
+  // Recupera todos os itens e seus motivos.
+  itens = dados.itens.map((item) => {
+    const base = novoItem(item);
+
+    return {
+      ...base,
+      ...item,
+      codigo: item.codigo || "",
+      nome: item.nome || "",
+      lancada: Number(item.lancada || 0),
+      conferida: Number(item.conferida || 0),
+      qtd: Number(
+        item.qtd ||
+        Math.abs(Number(item.conferida || 0) - Number(item.lancada || 0)) ||
+        1
+      ),
+      motivo: item.motivo || "",
+      validade: item.validade || "",
+      cod_errado: item.cod_errado || "",
+      cod_correto: item.cod_correto || ""
+    };
+  });
+
+  // Prepara a tela de edição.
+  $("secItens").hidden = false;
+  $("secTextos").hidden = true;
+
+  $("msgItens").textContent = "Editando divergência já salva.";
+
+  renderItens();
+
+  // Fecha a consulta e abre a edição.
+  $("detalheDivergencia").hidden = true;
+  modalConsulta.close();
+
+  window.scrollTo({
+    top: $("secItens").offsetTop - 20,
+    behavior: "smooth"
+  });
+
+  // Abre a confirmação dos dados da empresa.
+  $("btnOk").click();
+}
+
+$("btnEditarDivergencia").addEventListener(
+  "click",
+  iniciarEdicaoDivergencia
+);
+
+
 async function atualizarStatusDivergencia(novoStatus) {
   if (!divergenciaSelecionada) return;
 
@@ -859,8 +960,8 @@ async function atualizarStatusDivergencia(novoStatus) {
 
     const atualizado = Array.isArray(registrosAtualizados)
       ? registrosAtualizados.find(
-          (r) => Number(r.id) === Number(divergenciaSelecionada.id),
-        )
+        (r) => Number(r.id) === Number(divergenciaSelecionada.id),
+      )
       : null;
 
     if (atualizado) {

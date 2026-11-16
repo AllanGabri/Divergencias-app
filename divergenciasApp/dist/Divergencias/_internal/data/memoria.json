@@ -1,22 +1,37 @@
 {
   "empresas": [
+    "7Y(VOLK)",
     "BEIRA ALTA",
     "CAPRICHOSA",
     "CBB",
+    "D. CENTER",
     "DALLA",
+    "HASKELL",
+    "IMBECOR",
     "MAESTRAL",
     "MODERNINHAS",
+    "PLANCTON",
     "PLATINA",
-    "RAIMAR"
+    "RAIMAR",
+    "SOLFARMA",
+    "SUPERNOVA",
+    "VEMAC (BARBOURS)"
   ],
   "vendedores": [
+    "ATACADO",
+    "CARLA",
     "DIEGO",
     "DIONE",
+    "FERNANDA",
+    "HIDEKI",
     "HIKO",
     "HILTON",
     "JEFERSON",
+    "MIGUEL",
     "ROBSON",
-    "VANDRE"
+    "TATIANE",
+    "VANDRE",
+    "VANDRÉ"
   ],
   "fornecedores": {
     "1885": "PLATINA",
@@ -26,6 +41,14 @@
     "1185": "MAESTRAL",
     "2191": "MODERNINHAS",
     "1142": "RAIMAR",
-    "218": "BEIRA ALTA"
+    "218": "BEIRA ALTA",
+    "2586": "SOLFARMA",
+    "1484": "D. CENTER",
+    "2022": "VEMAC (BARBOURS)",
+    "1184": "IMBECOR",
+    "2131": "7Y(VOLK)",
+    "2618": "SUPERNOVA",
+    "1586": "HASKELL",
+    "2696": "PLANCTON"
   }
 }

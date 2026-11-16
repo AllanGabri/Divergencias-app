@@ -669,6 +669,161 @@ def api_atualizar_status_divergencia(id_divergencia):
     except Exception as e:
         app.logger.exception("Erro ao atualizar divergência")
         return jsonify(erro=f"Erro ao atualizar status: {e}"), 500
+    
+    
+@app.put("/api/divergencias/<int:id_divergencia>/editar")
+def api_editar_divergencia(id_divergencia):
+    d = request.get_json(silent=True) or {}
+
+    if not d.get("empresa") or not d.get("nf") or not d.get("itens"):
+        return jsonify(erro="Informe empresa, NF e pelo menos um item."), 400
+
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+
+            registro = conn.execute(
+                "SELECT * FROM divergencias WHERE id = ?",
+                (id_divergencia,)
+            ).fetchone()
+
+            if not registro:
+                return jsonify(erro="Divergência não encontrada."), 404
+
+            dados_antigos = json.loads(registro["dados_json"] or "{}")
+
+            data_registro = registro["data_registro"]
+            data_planilha = datetime.strptime(
+                data_registro[:10], "%Y-%m-%d"
+            ).date()
+
+            empresa = str(d["empresa"]).strip().upper()
+            nf = str(d["nf"]).strip()
+            vendedor = str(d.get("vendedor", "")).strip().upper()
+            fornecedor = str(d.get("fornecedor", "")).strip()
+
+            # Atualiza a mesma linha da planilha original.
+            with _lock:
+                if XLSX_PATH.exists():
+                    wb = load_workbook(XLSX_PATH)
+                    nome_aba = MESES[data_planilha.month - 1]
+
+                    if nome_aba not in wb.sheetnames:
+                        return jsonify(
+                            erro="A aba original não foi encontrada na planilha."
+                        ), 404
+
+                    ws = wb[nome_aba]
+
+                    linha_encontrada = None
+                    valor_antigo = (
+                        f"{registro['empresa']} {registro['nf']}"
+                    )
+
+                    for linha in range(3, ws.max_row + 1):
+                        valor = str(ws.cell(linha, 1).value or "").strip()
+
+                        if valor == valor_antigo:
+                            linha_encontrada = linha
+                            break
+
+                    if linha_encontrada is None:
+                        return jsonify(
+                            erro="Não encontrei a divergência original na planilha."
+                        ), 404
+
+                    ws.cell(linha_encontrada, 1).value = f"{empresa} {nf}"
+                    ws.cell(linha_encontrada, 3).value = vendedor
+
+                    # Atualiza os detalhes dos produtos no comentário.
+                    linhas = []
+
+                    for it in d["itens"]:
+                        motivo = MOTIVOS.get(
+                            it.get("motivo", ""),
+                            it.get("motivo", "")
+                        )
+
+                        extra = ""
+
+                        if it.get("motivo") == "codigo_incorreto":
+                            extra = (
+                                f" (faturado {it.get('cod_errado', '')}"
+                                f" -> correto {it.get('cod_correto', '')})"
+                            )
+
+                        if it.get("motivo") == "validade_prox":
+                            extra += (
+                                f" (validade {it.get('validade', '')})"
+                            )
+
+                        linhas.append(
+                            f"{it.get('nome', '')} "
+                            f"[{it.get('codigo', '')}] – "
+                            f"{motivo} {it.get('qtd', '')}un{extra}"
+                        )
+
+                    comentario = Comment(
+                        "\n".join(linhas),
+                        "Divergências"
+                    )
+
+                    comentario.width = 420
+                    comentario.height = 40 + 18 * len(linhas)
+
+                    ws.cell(
+                        linha_encontrada, 1
+                    ).comment = comentario
+
+                    wb.save(XLSX_PATH)
+
+            # Atualiza o registro original no SQLite.
+            d["data"] = data_registro[:10]
+            d["empresa"] = empresa
+            d["nf"] = nf
+            d["vendedor"] = vendedor
+            d["fornecedor"] = fornecedor
+
+            conn.execute(
+                """
+                UPDATE divergencias
+                SET empresa = ?,
+                    vendedor = ?,
+                    nf = ?,
+                    fornecedor = ?,
+                    dados_json = ?
+                WHERE id = ?
+                """,
+                (
+                    empresa,
+                    vendedor,
+                    nf,
+                    fornecedor,
+                    json.dumps(d, ensure_ascii=False),
+                    id_divergencia
+                )
+            )
+
+        gravar_memoria(empresa, vendedor, fornecedor)
+
+        return jsonify(
+            sucesso=True,
+            mensagem="Divergência editada com sucesso.",
+            id=id_divergencia
+        )
+
+    except PermissionError:
+        return jsonify(
+            erro="Feche a planilha no Excel ou LibreOffice e tente novamente."
+        ), 423
+
+    except Exception as e:
+        app.logger.exception("Erro ao editar divergência")
+
+        return jsonify(
+            erro=f"Erro ao editar divergência: {e}"
+        ), 500
+
 
 
 # --------------------------------------------------------------------- páginas

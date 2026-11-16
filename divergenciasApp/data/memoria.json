@@ -1,5 +1,6 @@
 {
   "empresas": [
+    "7Y(VOLK)",
     "CAPRICHOSA",
     "CBB",
     "DALLA",
@@ -8,6 +9,7 @@
   ],
   "vendedores": [
     "DIEGO",
+    "HIDEKI",
     "JEFERSON",
     "ROBSON",
     "VANDRE"
@@ -17,6 +19,7 @@
     "2448": "DALLA",
     "1285": "CAPRICHOSA",
     "2512": "CBB",
-    "1185": "MAESTRAL"
+    "1185": "MAESTRAL",
+    "2131": "7Y(VOLK)"
   }
 }
