@@ -1,3 +1,8 @@
+/* Respeita o atributo hidden mesmo quando há regras de display específicas. */
+[hidden] {
+  display: none !important;
+}
+
 :root {
   --azul: #1f5fbf;
   --borda: #d0d5dd;
@@ -849,4 +854,16 @@ dialog h2 {
 #data:read-only {
   background: #eeeeee;
   cursor: not-allowed;
+}
+
+
+#secConsulta button.btn-editar {
+  color: #1d4ed8;
+  background: #ffffff;
+  border: 1px solid #a9c4f5;
+}
+
+#secConsulta button.btn-editar:hover {
+  color: #ffffff;
+  background: #1d4ed8;
 }

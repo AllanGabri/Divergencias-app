@@ -1,3 +1,8 @@
+/* Respeita o atributo hidden mesmo quando há regras de display específicas. */
+[hidden] {
+  display: none !important;
+}
+
 :root {
   --azul: #1f5fbf;
   --borda: #d0d5dd;
@@ -787,4 +792,78 @@ dialog h2 {
 #secConsulta button.btn-excluir:disabled {
   opacity: 0.6;
   cursor: wait;
+}
+
+
+/* ===== EDIÇÃO DE DIVERGÊNCIAS SALVAS ===== */
+
+#btnEditarDivergencia {
+  background: #2563eb;
+  color: #ffffff;
+  border: 1px solid #2563eb;
+  font-weight: 600;
+}
+
+#btnEditarDivergencia:hover {
+  background: #1e40af;
+  border-color: #1e40af;
+}
+
+#btnEditarDivergencia:active {
+  transform: translateY(1px);
+}
+
+#secConsulta .acoes-registro {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 190px;
+}
+
+#secConsulta .acoes-registro button {
+  padding: 7px 11px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+#secConsulta button.btn-excluir {
+  color: #b42318;
+  background: #ffffff;
+  border: 1px solid #f0b4ae;
+}
+
+#secConsulta button.btn-excluir:hover {
+  color: #ffffff;
+  background: #b42318;
+}
+
+#secConsulta button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Indicação visual durante a edição */
+
+.item.editando {
+  border: 2px solid #2563eb;
+  background: #eff6ff;
+}
+
+/* Campo de data bloqueado durante edição */
+
+#data:read-only {
+  background: #eeeeee;
+  cursor: not-allowed;
+}
+
+
+#secConsulta button.btn-editar {
+  color: #1d4ed8;
+  background: #ffffff;
+  border: 1px solid #a9c4f5;
+}
+
+#secConsulta button.btn-editar:hover {
+  color: #ffffff;
+  background: #1d4ed8;
 }

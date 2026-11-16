@@ -669,6 +669,10 @@ async function carregarDivergencias() {
     Ver detalhes
   </button>
 
+  <button type="button" class="btn-editar" data-editar="${Number(registro.id)}">
+    Editar
+  </button>
+
   <button
     type="button"
     class="btn-excluir"
@@ -695,6 +699,22 @@ async function carregarDivergencias() {
         if (registro) {
           abrirDetalheDivergencia(registro);
         }
+      });
+    });
+
+    // Botão para editar diretamente pela lista.
+    tabela.querySelectorAll("[data-editar]").forEach((botao) => {
+      botao.addEventListener("click", () => {
+        const id = Number(botao.dataset.editar);
+        const registro = registros.find((r) => Number(r.id) === id);
+
+        if (!registro) {
+          mensagem.textContent = "Não foi possível localizar o registro para editar.";
+          return;
+        }
+
+        divergenciaSelecionada = registro;
+        iniciarEdicaoDivergencia();
       });
     });
 
@@ -822,7 +842,9 @@ function abrirDetalheDivergencia(registro) {
   `;
 
   $("solucaoDivergencia").value = registro.solucao || "";
-  $("detalheMensagem").textContent = "";
+  if ($("detalheMensagem")) {
+    $("detalheMensagem").textContent = "";
+  }
   $("btnReabrirDivergencia").disabled = registro.status !== "OK";
   $("btnResolverDivergencia").disabled = registro.status === "OK";
 
