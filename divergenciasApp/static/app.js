@@ -925,21 +925,24 @@ function iniciarEdicaoDivergencia() {
   $("btnOk").click();
 }
 
-$("btnEditarDivergencia").addEventListener(
-  "click",
-  iniciarEdicaoDivergencia
-);
+
 
 
 async function atualizarStatusDivergencia(novoStatus) {
-  if (!divergenciaSelecionada) return;
+  if (!divergenciaSelecionada) {
+    alert("Selecione uma divergência primeiro.");
+    return;
+  }
 
+  const id = Number(divergenciaSelecionada.id);
   const solucao = $("solucaoDivergencia").value.trim();
   const mensagem = $("detalheMensagem");
 
   if (novoStatus === "OK" && !solucao) {
     mensagem.textContent =
       "Descreva como a divergência foi resolvida antes de continuar.";
+
+    $("solucaoDivergencia").focus();
     return;
   }
 
@@ -950,53 +953,78 @@ async function atualizarStatusDivergencia(novoStatus) {
     return;
   }
 
+  const btnResolver = $("btnResolverDivergencia");
+  const btnReabrir = $("btnReabrirDivergencia");
+
+  btnResolver.disabled = true;
+  btnReabrir.disabled = true;
+
   mensagem.textContent = "Salvando alterações...";
 
   try {
     const resposta = await fetch(
-      `/api/divergencias/${Number(divergenciaSelecionada.id)}/status`,
+      `/api/divergencias/${id}/status`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json"
+        },
         body: JSON.stringify({
           status: novoStatus,
-          solucao: novoStatus === "OK" ? solucao : "",
-        }),
-      },
+          solucao: novoStatus === "OK" ? solucao : ""
+        })
+      }
     );
 
     const resultado = await resposta.json();
 
     if (!resposta.ok) {
-      throw new Error(resultado.erro || "Não foi possível atualizar.");
+      throw new Error(
+        resultado.erro || "Não foi possível atualizar o status."
+      );
     }
 
-    mensagem.textContent = "Alterações salvas no banco de dados.";
+    mensagem.textContent =
+      "Status atualizado com sucesso!";
 
+    // Atualiza a tabela.
     await carregarDivergencias();
 
-    const consultaAtualizada = await fetch(
-      `/api/divergencias?status=${novoStatus}`,
+    // Busca novamente o registro atualizado.
+    const consulta = await fetch(
+      `/api/divergencias?status=${novoStatus}`
     );
-    const registrosAtualizados = await consultaAtualizada.json();
 
-    const atualizado = Array.isArray(registrosAtualizados)
-      ? registrosAtualizados.find(
-        (r) => Number(r.id) === Number(divergenciaSelecionada.id),
-      )
-      : null;
+    const registros = await consulta.json();
+
+    if (!consulta.ok) {
+      throw new Error("Não foi possível atualizar os detalhes.");
+    }
+
+    const atualizado = registros.find(
+      registro => Number(registro.id) === id
+    );
 
     if (atualizado) {
       abrirDetalheDivergencia(atualizado);
-      $("detalheMensagem").textContent = "Alterações salvas com sucesso.";
+      mensagem.textContent = "Status atualizado com sucesso!";
     } else {
       $("detalheDivergencia").hidden = true;
       divergenciaSelecionada = null;
     }
+
   } catch (erro) {
-    mensagem.textContent = `Erro: ${erro.message}`;
+    mensagem.textContent = "Erro: " + erro.message;
+
+  } finally {
+    btnResolver.disabled =
+      divergenciaSelecionada?.status === "OK";
+
+    btnReabrir.disabled =
+      divergenciaSelecionada?.status !== "OK";
   }
 }
+
 
 $("btnFiltrarDivergencias").addEventListener("click", carregarDivergencias);
 
@@ -1050,3 +1078,39 @@ modalConsulta.addEventListener("click", (event) => {
 modalConsulta.addEventListener("close", () => {
   btnAbrirConsulta.focus();
 });
+
+
+/* ===== ATALHOS DE TECLADO ===== */
+
+// Enter nos campos de filtro executa a pesquisa.
+[
+  "filtroDataInicio",
+  "filtroDataFim",
+  "filtroEmpresa",
+  "filtroVendedor",
+  "filtroStatus"
+].forEach(id => {
+  const campo = $(id);
+
+  campo.addEventListener("keydown", event => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      carregarDivergencias();
+    }
+  });
+});
+
+// Enter nos campos NF e fornecedor confirma os itens,
+// desde que o botão OK esteja habilitado.
+["nf", "forn"].forEach(id => {
+  $(id).addEventListener("keydown", event => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+
+      if (!$("btnOk").disabled) {
+        $("btnOk").click();
+      }
+    }
+  });
+});
+
